@@ -1,0 +1,1 @@
+Metodologia baseada em revisão sistemática de literatura seguindo as diretrizes PRISMA, com busca nas bases Scopus e Web of Science.

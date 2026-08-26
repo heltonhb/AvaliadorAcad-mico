@@ -1,0 +1,41 @@
+# Dockerfile.backend — FastAPI API service
+FROM python:3.11-slim
+
+# Avoid .pyc files and force stdout
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    poppler-utils \
+    ghostscript \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install notebooklm-py via uv
+RUN pip install --no-cache-dir uv && \
+    uv tool install notebooklm-py
+
+# Ensure uv tools are in PATH
+ENV PATH="/root/.local/bin:$PATH"
+
+# Copy application code (excludes .env via .dockerignore)
+COPY . .
+
+# Frontend build: O Nginx monta frontend/dist como volume,
+# então NÃO precisamos buildar aqui. O api.py serve o frontend
+# compilado quando accessible diretamente pela porta 8000.
+
+# Make start script executable
+RUN chmod +x start.sh
+
+EXPOSE 8000
+
+# Default command
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

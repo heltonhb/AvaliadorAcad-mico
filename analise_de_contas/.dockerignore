@@ -1,0 +1,37 @@
+# Arquivos/pastas que NÃO devem entrar na imagem Docker.
+# Estes ignoram o build (sem herança do .gitignore, que é só para git).
+
+# Segredos e configs locais
+.env
+.env.*
+!.env.example
+.git/
+.gitignore
+.gitattributes
+
+# Build outputs / deps
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+frontend/dist/
+frontend/node_modules/
+*.log
+.pipeline_running.lock
+.pipeline.lock
+
+# IDE / OS junk
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Coisas legadas que podem estar no repo mas não entram no container
+tests/
+.streamlit/
+pages/
+style.css
+streamlit.log

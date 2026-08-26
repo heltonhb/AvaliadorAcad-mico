@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+
+# Pipeline runtime artefacts
+.pipeline_running.lock
+.pipeline.lock
+
+# Logs
+*.log
+
+# Node (orphaned at root, and inside frontend/)
+node_modules/
+package-lock.json
+
+# Frontend build outputs (keep src + configs only)
+frontend/dist/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

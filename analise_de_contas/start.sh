@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# 🏢 Análise de Contas Condominiais v7.0 — Iniciar API (+ Frontend Build)
+# Uso: ./start.sh [--dev|--build]
+
+set -e
+
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+API_PORT="${API_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+
+cleanup() {
+    echo ""
+    echo "🛑 Encerrando..."
+    [ -n "$API_PID" ] && kill "$API_PID" 2>/dev/null
+    [ -n "$FE_PID" ] && kill "$FE_PID" 2>/dev/null
+    wait 2>/dev/null
+    echo "👋 Até logo!"
+}
+trap cleanup EXIT INT TERM
+
+start_api() {
+    echo "📡 Iniciando API em http://0.0.0.0:${API_PORT} ..."
+    cd "$APP_DIR"
+    python3 api.py &
+    API_PID=$!
+    
+    # Aguarda a API inicializar e responder /api/health
+    for i in {1..20}; do
+        if curl -s "http://127.0.0.1:${API_PORT}/api/health" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.3
+    done
+
+    if kill -0 "$API_PID" 2>/dev/null; then
+        echo "✅ API rodando (PID: $API_PID)"
+    else
+        echo "❌ Falha ao iniciar API"
+        exit 1
+    fi
+}
+
+start_frontend_dev() {
+    echo "🌐 Iniciando Frontend Dev em http://localhost:${FRONTEND_PORT} ..."
+    cd "$APP_DIR/frontend"
+    npm run dev -- --port "$FRONTEND_PORT" &
+    FE_PID=$!
+    echo "✅ Frontend Dev iniciando (PID: $FE_PID)"
+}
+
+case "${1:-dev}" in
+    dev)
+        start_api
+        start_frontend_dev
+        echo ""
+        echo "═══════════════════════════════════════════"
+        echo "  🏢 Análise de Contas Condominiais v7.0"
+        echo "  📡 API:      http://localhost:${API_PORT}"
+        echo "  🌐 Frontend: http://localhost:${FRONTEND_PORT}"
+        echo "  📋 Docs API: http://localhost:${API_PORT}/docs"
+        echo "═══════════════════════════════════════════"
+        echo ""
+        wait
+        ;;
+    build|prod)
+        echo "🏗️  Servindo build de produção..."
+        echo "📡 API + Frontend em http://localhost:${API_PORT}"
+        start_api
+        wait "$API_PID"
+        ;;
+    api-only|api)
+        start_api
+        wait "$API_PID"
+        ;;
+    *)
+        echo "Uso: $0 [dev|build|api]"
+        echo "  dev   (padrão)  API + Frontend Dev (Vite)"
+        echo "  build           API servindo Frontend Build (produção)"
+        echo "  api             Apenas API"
+        exit 1
+        ;;
+esac

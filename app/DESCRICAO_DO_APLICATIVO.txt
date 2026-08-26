@@ -1,0 +1,416 @@
+================================================================================
+                    ANALISETEXTOS (ANÁLISE CIENTÍFICA v6.0)
+     DOCUMENTAÇÃO TÉCNICA, REGRAS DE FUNCIONAMENTO E REGRAS DE NEGÓCIOS
+================================================================================
+Data de Atualização: 20/08/2026
+Versão da Aplicação: v6.0 (Architecture: FastAPI REST + React 19 + NotebookLM Core)
+Ambiente Operacional: Linux / macOS / Docker / WSL2
+
+
+================================================================================
+1. DESCRIÇÃO DETALHADA DO APLICATIVO
+================================================================================
+
+1.1. O QUE É O ANALISETEXTOS?
+O AnaliseTextos é uma plataforma avançada e automatizada de Auditoria Científica
+e Peer-Review Acadêmico desenvolvida para analisar trabalhos acadêmicos (artigos
+científicos, dissertações de mestrado, teses de doutorado, TCCs e propostas de
+qualificação de bancas examinadoras).
+
+O sistema utiliza o Google NotebookLM como motor de inteligência e raciocínio 
+profundo (reasoning engine), complementado por validação bibliográfica em tempo 
+real via Crossref, orquestração de pipeline com tolerância a falhas, geração de 
+múltiplos artefatos de saída (PDFs formais, slides PPTX, dashboards interativos, 
+CSV de erros e apresentações HTML animadas) e uma interface moderna em React.
+
+1.2. OBJETIVOS PRINCIPAIS
+- Prover uma banca examinadora virtual rigorosa, consistente e padronizada.
+- Auditar minuciosamente a metodologia, a consistência estatística, os gaps lógicos
+  e a conformidade ética e editorial dos documentos submetidos.
+- Detectar falhas argumentativas, non sequitur, inconsistências numéricas entre
+  tabelas e texto, além de potenciais problemas de integridade científica.
+- Gerar pareceres oficiais formais prontos para emissão por comissões de bancas
+  examinadoras e editores científicos.
+- Permitir a comparação evolutiva entre versões de um mesmo paper ou entre múltiplos
+  candidatos em processos seletivos e bancas de defesa.
+
+1.3. ARQUITETURA DO SISTEMA
+O aplicativo é estruturado em quatro camadas integradas:
+
+A) FRONTEND (Interface do Usuário):
+   - Single Page Application (SPA) construída em React 19, Vite e Tailwind CSS v4.
+   - Biblioteca de ícones Lucide React e visualizações de dados com Recharts.
+   - Renderização Markdown em tempo real com suporte a tabelas GFM (remark-gfm).
+   - Comunicação assíncrona com a API via Server-Sent Events (SSE) para atualização
+     de logs e barra de progresso em tempo real.
+   - Módulos de Dashboard de Estatísticas, Upload & Início de Análise, Visualizador
+     de Resultados com filtros, Histórico Geral e Módulo Comparativo de Versões.
+
+B) BACKEND REST API (Servidor de Aplicação):
+   - Desenvolvido em Python com FastAPI e Uvicorn.
+   - Endpoints REST para upload seguro de PDFs, controle do pipeline, leitura de
+     status via SSE, download de artefatos e navegação segura de diretórios.
+   - Camada de segurança com autenticação opcional via API Key (header X-API-Key),
+     prevenção contra Path Traversal, validação estrita de magic bytes de arquivos
+     e sanitização XSS de conteúdos HTML via Bleach.
+
+C) MOTOR DE RACIOCÍNIO CIENTÍFICO (Google NotebookLM CLI):
+   - O orquestrador interage com a CLI `notebooklm-py` autenticada.
+   - Cria notebooks dedicados para cada trabalho submetido.
+   - Configura a Persona do Revisor Sênior com diretrizes específicas por domínio.
+   - Raciocínio contextual cumulativo: os relatórios de cada módulo concluído são
+     reinseridos no notebook como novas fontes de conhecimento, permitindo que os
+     módulos seguintes façam validações cruzadas.
+
+D) GERADORES DE ARTEFATOS E GROUNDING EXTERNO:
+   - ReportLab: Geração do Parecer Técnico Oficial da Banca em PDF diagramado.
+   - Crossref API (HTTPX): Auditoria bibliográfica factual de DOIs e artigos retratados.
+   - Mira Animator (Jinja2 + D3.js + Tailwind): Apresentação animada interativa.
+   - Python-PPTX: Apresentações de slides em formato PowerPoint para bancas.
+   - Parser CSV: Extração tabular de todos os erros gramaticais e estilísticos.
+
+
+================================================================================
+2. CONDIÇÕES E PRÉ-REQUISITOS PARA EXECUÇÃO
+================================================================================
+
+2.1. REQUISITOS DE SISTEMA OPERACIONAL E AMBIENTE
+- Sistema Operacional: Linux (Ubuntu 20.04+, Debian, Fedora, Arch) ou macOS. No
+  Windows, requer WSL2 (Windows Subsystem for Linux) ou execução via Docker.
+- Interpretador Python: Versão 3.11 ou superior.
+- Node.js & NPM: Node.js v18+ e npm v9+ (necessários para build/dev do frontend).
+
+2.2. PACOTES E UTILITÁRIOS DE SISTEMA (LINUX/APT)
+O pipeline necessita de ferramentas de linha de comando para manipular PDFs e OCR:
+- `poppler-utils` (fornece `pdftotext` para verificação rápida de texto e OCR).
+- `ghostscript` (fornece `gs` para otimização e compressão de PDFs pesados >100MB).
+- `libnotify-bin` (opcional, para envio de notificações desktop via `notify-send`).
+
+Comando de instalação no Ubuntu/Debian:
+  sudo apt-get update && sudo apt-get install -y poppler-utils ghostscript curl
+
+2.3. DEPENDÊNCIAS PYTHON (requirements.txt)
+As dependências do backend Python devem ser instaladas no ambiente virtual:
+- fastapi >= 0.110.0        (Framework web REST)
+- uvicorn[standard] >= 0.28.0 (Servidor ASGI de alta performance)
+- pydantic >= 2.0           (Validação e esquemas de dados)
+- python-multipart >= 0.0.9 (Suporte a upload de arquivos na API)
+- pandas >= 2.0             (Manipulação tabular de dados)
+- python-pptx >= 1.0        (Geração de slides PowerPoint)
+- bleach >= 6.0             (Sanitização de HTML contra vulnerabilidades XSS)
+- bcrypt >= 4.0             (Hash seguro de senhas)
+- jinja2 >= 3.1             (Motor de templates para HTMLs animados)
+- python-dotenv >= 1.0      (Carregamento de variáveis de ambiente do .env)
+- httpx >= 0.27.0           (Cliente HTTP assíncrono para chamadas à API Crossref)
+- reportlab >= 4.0          (Composição vetorial de relatórios formais em PDF)
+
+Instalação:
+  pip install -r requirements.txt
+
+2.4. MOTOR NOTEBOOKLM (CLI E AUTENTICAÇÃO)
+O aplicativo depende da ferramenta de linha de comando `notebooklm` instalada e
+autenticada no perfil do usuário local:
+- Instalação via UV / Pip:
+    uv tool install notebooklm-py
+    # ou: pip install notebooklm-py
+- Autenticação prévia obrigatória:
+    notebooklm login
+  (Gera credenciais/cookies de sessão salvos no diretório local `~/.notebooklm/`).
+
+2.5. VARIÁVEIS DE AMBIENTE (.env)
+Configurações suportadas pelo sistema (arquivo `.env` na raiz do app):
+- `ANALISE_BASE_DIR`: Diretório raiz onde residem as pastas `uploads` e `Arquivos das bancas`.
+- `ANALISE_PASSWORD`: Senha de proteção da API e frontend (Header `X-API-Key`).
+- `ALLOWED_ORIGINS`: Origens autorizadas para CORS (ex: `http://localhost:5173,http://localhost:8000`).
+- `API_PORT`: Porta TCP do backend FastAPI (padrão: 8000).
+- `FRONTEND_PORT`: Porta TCP do servidor de desenvolvimento Vite (padrão: 5173).
+- `MAX_UPLOAD_MB`: Limite máximo para upload de arquivos PDF (padrão: 100 MB).
+- `WAIT_SOURCE_TIMEOUT`: Tempo limite para indexação do PDF no NotebookLM (padrão: 240s).
+- `GENERATE_TIMEOUT`: Tempo limite para geração de artefatos de IA (padrão: 600s).
+- `RUN_CMD_TIMEOUT`: Timeout padrão para execução de comandos do sistema (padrão: 300s).
+- `ANALISE_DEFAULT_DOMAIN`: Domínio padrão (`cs`, `med`, `human`).
+- `ANALISE_DEFAULT_MODE`: Modo padrão de execução (`full`, `lite`).
+
+2.6. MODOS DE INICIALIZAÇÃO DA APLICAÇÃO
+A) Modo Desenvolvimento (API FastAPI + Vite Dev Server):
+   ./start.sh dev
+   - API disponível em: http://localhost:8000
+   - Interface Web em: http://localhost:5173
+   - Documentação Swagger da API em: http://localhost:8000/docs
+
+B) Modo Produção (FastAPI servindo o bundle compilado do Frontend):
+   cd frontend && npm run build && cd ..
+   ./start.sh build
+   - Aplicação unificada servida em: http://localhost:8000
+
+C) Modo API Exclusivo (Headless):
+   ./start.sh api
+
+D) Execução Direta via CLI (Pipeline em Background / Terminal):
+   python3 -m pipeline.runner /caminho/do/artigo.pdf --domain cs --mode full --resume
+
+E) Execução via Docker Compose:
+   docker compose up -d
+
+
+================================================================================
+3. REGRAS DE FUNCIONAMENTO (WORKFLOW OPERACIONAL)
+================================================================================
+
+3.1. FLUXO DE UPLOAD E VALIDAÇÃO
+1. Recepção do Arquivo: O arquivo é enviado via endpoint `/api/upload`.
+2. Validação de Magic Bytes: O sistema inspeciona os primeiros 1024 bytes para
+   confirmar a assinatura `%PDF`, rejeitando executáveis renomeados ou arquivos corrompidos.
+3. Sanitização de Nome: O nome do arquivo é limpo, eliminando caracteres especiais,
+   espaços e sequências de path traversal (`../`).
+4. Streaming em Chunks: O upload é gravado no disco em blocos de 1 MB, prevenindo
+   sobrecarga de memória RAM no servidor.
+
+3.2. PRÉ-PROCESSAMENTO E PRE-FLIGHT
+1. Otimização de PDFs Grandes: Se o arquivo ultrapassar 100 MB, o Ghostscript é
+   acionado automaticamente (`-dPDFSETTINGS=/ebook`) para comprimir imagens em ~150 DPI,
+   preservando o texto vetorial integral para o motor de IA.
+2. Checagem de OCR: O utilitário `pdftotext` verifica se o PDF contém texto legível.
+   Se contiver menos de 100 caracteres extraíveis, um alerta de documento escaneado
+   é emitido no log.
+3. Lock de Diretório (`fcntl`): O pipeline cria um bloqueio exclusivo no diretório de
+   saída. Caso outro processo tente analisar o mesmo documento simultaneamente, a
+   execução é impedida para evitar condições de corrida (race conditions).
+
+3.3. CRIAÇÃO E CONFIGURAÇÃO DO NOTEBOOKLM
+1. Criação do Notebook: O pipeline cria um notebook dedicado intitulado `Peer-Review v6: <nome_do_arquivo>`.
+2. Injeção de Persona: Configura a persona do avaliador no NotebookLM com as diretrizes
+   metodológicas do domínio selecionado.
+3. Upload do PDF: O PDF otimizado é carregado como fonte primária do notebook.
+4. Indexação com Backoff Exponencial: O sistema aguarda até que o status da fonte
+   esteja marcado como `ready`.
+
+3.4. EXECUÇÃO MODULAR E RACIOCÍNIO ACUMULATIVO
+1. Os módulos de análise (00 a 07) são acionados sequencialmente.
+2. A cada módulo concluído com sucesso, o arquivo Markdown gerado é adicionado de
+   volta ao NotebookLM como fonte secundária (`add_source`). Isso permite que os
+   módulos posteriores (como o Módulo 06 de Parecer Final) acessem o histórico
+   completo de achados e cruzem informações com profundidade.
+3. Sistema de Checkpoint (`.checkpoint.json`): Cada etapa concluída é persistida
+   no disco. Em caso de queda de energia, limite de taxa (rate limit) ou interrupção,
+   a flag `--resume` retoma a execução exatamente do último módulo pendente, sem
+   reprocessar etapas já finalizadas.
+
+3.5. AUDITORIA BIBLIOGRÁFICA EXTERNA (CROSSREF)
+1. Extração de DOIs: O sistema varre o texto do PDF buscando padrões regex de DOIs
+   (`10.xxxx/...`).
+2. Consulta à API Crossref: Cada DOI é consultado para validar metadados oficiais
+   (título, ano de publicação, periódico, contagem de citações).
+3. Detecção de Retratações: O sistema verifica o campo `update-to` do Crossref para
+   detectar se o trabalho citado sofreu retratação por fraude ou erro metodológico.
+4. Cálculo de Atualidade: Calcula o percentual de referências dos últimos 5 anos.
+5. Os resultados são exportados no arquivo estruturado `auditoria_bibliografica.json`.
+
+3.6. GERAÇÃO DE ARTEFATOS E EXPORTAÇÃO
+1. Tabela CSV de Erros: O relatório do Módulo 05 é processado para extrair a tabela
+   de problemas gramaticais e salvar em `tabela_erros.csv`.
+2. Relatório Consolidado: Todos os arquivos Markdown são compilados em `relatorio_completo.md`.
+3. Parecer Técnico Oficial em PDF: Gerado via ReportLab com cabeçalho institucional,
+   quadros de notas, rubricas, pontos fortes, fragilidades e rodapé paginado (`Página X de Y`).
+4. Apresentação Animada HTML: Compilada via Jinja2 e D3.js no arquivo `apresentacao_animada.html`.
+5. Slides de Apresentação (PPTX / PDF): Gera apresentação completa com estrutura
+   padronizada de 15 slides para apresentação perante a banca.
+6. Infográfico Visual: Gera artefato gráfico com diagramação dos indicadores.
+7. Metadados Estruturados (`score.json`): Persiste nota final, decisão e resumo para
+   o frontend e operações de comparação.
+
+
+================================================================================
+4. REGRAS DE NEGÓCIOS E CRITÉRIOS AVALIATIVOS
+================================================================================
+
+4.1. DOMÍNIOS ACADÊMICOS E DIRETRIZES ESPECÍFICAS
+O aplicativo suporta três perfis de avaliação científica:
+
+A) COMPUTATION (`cs` - Computação):
+   - Normas: IEEE, ACM, SBC, CORE.
+   - Critérios de Auditoria:
+     * Reprodutibilidade computacional: disponibilidade de código-fonte, dados abertos,
+       especificação de sementes aleatórias (random seeds), hardware e versões de bibliotecas.
+     * Conformidade com os princípios FAIR (Findable, Accessible, Interoperable, Reusable).
+     * Rigor experimental: inclusão de baselines atualizadas, estudos de ablação (ablation
+       studies), análise de sensibilidade e testes de significância estatística.
+     * Validação cruzada e separação estrita entre conjuntos de treino/teste/validação.
+
+B) MEDICINE & HEALTH (`med` - Medicina e Ciências da Saúde):
+   - Normas: Declaração de Helsinki, CONSORT (ensaios clínicos), PRISMA (revisões sistemáticas),
+     STROBE (estudos observacionais), SPIRIT, GRADE, Newcastle-Ottawa.
+   - Critérios de Auditoria:
+     * Registro prévio de protocolo em bases públicas (ClinicalTrials.gov, PROSPERO, ReBEC).
+     * Aprovação formal por Comitê de Ética em Pesquisa (CEP/CONEP/IRB) e menção ao número do parecer.
+     * Aplicação adequada do Termo de Consentimento Livre e Esclarecido (TCLE).
+     * Análise estatística: poder amostral a priori, cálculo de NNT, tamanho de efeito,
+       intervalos de confiança de 95% e correção para múltiplos testes (Bonferroni/FDR).
+
+C) HUMANITIES & SOCIAL SCIENCES (`human` - Humanidades e Ciências Sociais):
+   - Normas: APA (7ª edição), ABNT, MLA, Chicago.
+   - Critérios de Auditoria:
+     * Posicionamento teórico-epistemológico explícito e coerência paradigmática.
+     * Triangulação metodológica e explicitação do corpus de análise ou trabalho de campo.
+     * Reflexividade do pesquisador e detalhamento dos procedimentos de categorização/codificação.
+     * Atingimento de saturação teórica em investigações qualitativas.
+
+4.2. MODOS DE OPERAÇÃO
+- Modo FULL (Completo): Executa todos os 8 módulos (00 a 07) + auditoria Crossref + artefatos.
+- Modo LITE (Rápido): Executa 6 módulos (pula Módulo 03 - SOTA e Módulo 07 - Quantitativo).
+  * REGRA FUNDAMENTAL: O Módulo 02 (Auditoria Editorial e Ética) NUNCA é pulado no modo lite,
+    assegurando a verificação de compliance ético em todas as execuções.
+
+4.3. OS 8 MÓDULOS DE ANÁLISE PEER-REVIEW
+- MÓDULO 00 — Estrutura do Documento:
+  Mapeia padrão IMRAD (Introdução, Método, Resultados e Discussão), qualificação do PDF,
+  verificação de seções obrigatórias ausentes, proporção de tamanho de cada seção e
+  alinhamento entre os objetivos e as conclusões.
+
+- MÓDULO 01 — Auditoria Metodológica:
+  Classifica o tipo de estudo, avalia validade interna (risco de vieses) e externa
+  (generalização), rigor do cálculo amostral, representatividade da população,
+  confiabilidade dos instrumentos de medição e reprodutibilidade científica.
+
+- MÓDULO 02 — Checklist Editorial & Integridade:
+  Audita aprovação CEP/IRB, consentimento TCLE, declarações de Conflito de Interesses (COI),
+  fontes de financiamento, declaração sobre uso de ferramentas de IA Generativa / LLMs,
+  Data Availability Statement, taxonomia CRediT, risco de plágio e citações a fontes predatórias.
+
+- MÓDULO 03 — Referencial Teórico & Estado da Arte (SOTA):
+  Avalia a solidez do marco teórico, síntese crítica versus mera listagem bibliográfica,
+  clareza da lacuna de pesquisa (gap), atualidade das fontes (% últimos 5 anos),
+  detecção de autocitação abusiva (>20%), cartéis de citação e diversidade geográfica.
+
+- MÓDULO 04 — Gaps Lógicos e Fragilidades Argumentativas:
+  Inspeciona a quebra na cadeia de evidência (Dados -> Resultados -> Conclusões).
+  Classifica falhas por severidade com citação textual obrigatória:
+  * Gravidade Crítica (🔴): Falácias lógicas, non sequitur, falsa causa, contradições internas.
+  * Gravidade Moderada (🟡): Cherry-picking de dados, correlação tratada como causalidade, extrapolações.
+  * Gravidade Leve (🟢): Imprecisões terminológicas, afirmações categóricas sem respaldo.
+
+- MÓDULO 05 — Análise da Qualidade da Escrita:
+  Audita registro acadêmico, clareza sintática, detecção de padrões artificiais gerados
+  por LLMs, índice de legibilidade e elabora tabela de correções textuais apontando a
+  seção, o tipo de erro, o trecho original e a sugestão de correção.
+
+- MÓDULO 06 — Síntese Executiva e Parecer Final da Banca:
+  Consolida a avaliação global em formato de parecer oficial:
+  * Resumo Executivo e Nível de Contribuição (Incremental / Significativa / Transformadora).
+  * Veredito da Banca, Pontos Fortes e Fragilidades com citação do módulo de origem.
+  * Recomendações Priorizadas: [OBRIGATÓRIO], [RECOMENDADO] e [SUGERIDO].
+  * Carta Confidencial ao Editor.
+  * Atribuição de Decisão Final e Nota de 0.0 a 10.0.
+
+- MÓDULO 07 — Auditoria Quantitativa:
+  Conferência matemática e estatística minuciosa:
+  * Consistência cruzada entre dados das tabelas, figuras e texto corrido (recálculo de somas e proporções).
+  * Verificação de valores suspeitos (percentuais que não somam 100%, divergência de N amostral).
+  * Validação das premissas de testes estatísticos, valores-p reportados, intervalos de confiança e tamanhos de efeito.
+
+4.4. RUBRICA DE AVALIAÇÃO E NOTAS (ESCALA DE 0 A 10)
+A nota atribuída pela banca virtual no Módulo 06 segue a seguinte rubrica estrita:
+- [9.0 a 10.0] EXCELENTE:
+  Trabalho metodologicamente impecável, contribuição significativa e escrita madura.
+  Pronto para publicação / aprovação com mérito ou apenas ajustes cosméticos mínimos.
+- [7.0 a 8.9] BOM:
+  Artigo sólido com mérito científico evidente. Apresenta pequenas inconsistências
+  ou demandas de esclarecimento. Decisão: Minor Revisions (Aprovado com ressalvas).
+- [5.0 a 6.9] REGULAR:
+  Potencial científico existente, mas com fragilidades metodológicas ou gaps lógicos
+  que necessitam de revisões substanciais. Decisão: Major Revisions.
+- [3.0 a 4.9] FRACO:
+  Problemas estruturais severos, falhas de amostragem ou argumentação inconsistente.
+  Exige reformulação profunda e reescrita ampla. Decisão: Reject & Resubmit.
+- [0.0 a 2.9] INADEQUADO:
+  Falhas fatais de metodologia, ausência de dados empíricos, violações éticas graves,
+  plágio ou ausência total de originalidade. Decisão: Reject (Reprovação definitiva).
+
+4.5. DECISÕES EDITORIAIS FORMAIS
+- `Accept` (Aceito / Aprovado sem alterações)
+- `Minor Revisions` (Revisões Menores / Aprovado com pequenas correções)
+- `Major Revisions` (Revisões Maiores / Exige reformulações e nova submissão à banca)
+- `Reject` (Rejeitado / Reprovado)
+
+4.6. MÓDULO COMPARATIVO (EVOLUÇÃO ENTRE VERSÕES E BANCAS)
+A aplicação possui lógica dedicada para comparação entre duas análises (`/api/analyses/compare`):
+- Comparação de Versões (V1 vs V2): Mede o impacto das alterações feitas pelo autor após um parecer.
+- Comparação entre Candidatos: Permite avaliar trabalhos concorrentes em bancas seletivas.
+- Métricas Calculadas Automaticamente:
+  * Delta de Nota (`Δ Nota` = Nota_Alvo - Nota_Base).
+  * Delta de Erros Textuais (`Δ Erros` = Erros_Alvo - Erros_Base).
+  * Alteração de Decisão Editorial (ex: de Major Revisions para Accept).
+  * Indicador Booleano de Evolução Positiva (se houve ganho de nota e/ou redução de erros).
+
+
+================================================================================
+5. ESTRUTURA DE DIRETÓRIOS E ARQUIVOS GERADOS
+================================================================================
+
+AnaliseTextos/
+├── app/
+│   ├── api.py                    # Backend FastAPI REST (Rotas, SSE, Endpoints)
+│   ├── artifacts.py              # Geradores de CSV, PPTX e HTML Mira Animator
+│   ├── prompts.py                # Prompts estruturados dos módulos 00-07 e personas
+│   ├── security.py               # Sanitização HTML, validação de PDF e autenticação
+│   ├── utils.py                  # Parsers de notas, expressões regulares e helpers
+│   ├── start.sh                  # Script unificado de inicialização (dev/build/api)
+│   ├── requirements.txt          # Dependências Python
+│   ├── Dockerfile                # Configuração do container Docker de produção
+│   ├── docker-compose.yml        # Orquestração do container e volumes
+│   ├── pipeline/
+│   │   ├── runner.py             # Orquestrador do pipeline (CLI e background runner)
+│   │   ├── notebooklm.py         # Interface de baixo nível com o NotebookLM CLI
+│   │   ├── bibliography.py       # Auditoria de DOIs e retratações via Crossref
+│   │   ├── pdf_report.py         # Emissor do Parecer Oficial da Banca em PDF
+│   │   ├── checkpoint.py         # Mecanismo de persistência e retomada de estado
+│   │   ├── lock.py               # Bloqueio de concorrência por diretório (fcntl)
+│   │   └── utils.py              # Execução segura de subprocessos, OCR e Ghostscript
+│   └── frontend/
+│       ├── package.json          # Dependências Node.js / React
+│       ├── vite.config.js        # Configuração do Vite
+│       └── src/
+│           ├── App.jsx           # Rotas e layout principal
+│           ├── api.js            # Cliente HTTP com interceptors e SSE
+│           ├── pages/            # Dashboard, Upload, Results, History, Compare
+│           └── components/       # Layout, DirectoryPicker, Toast, ErrorBoundary
+├── uploads/                      # Armazenamento temporário de PDFs enviados
+└── Arquivos das bancas/          # Diretório padrão de saída das análises
+    └── peer_review_<nome_do_paper>/
+        ├── .checkpoint.json              # Estado e progresso dos módulos
+        ├── pipeline_status.json          # Status atual do passo em execução
+        ├── score.json                    # Metadados estruturados (Nota e Decisão)
+        ├── 00_estrutura_documento.md     # Relatório Módulo 00
+        ├── 01_metodologia.md             # Relatório Módulo 01
+        ├── 02_auditoria_editorial.md     # Relatório Módulo 02
+        ├── 03_sota_referencias.md        # Relatório Módulo 03
+        ├── 04_gaps_logicos.md            # Relatório Módulo 04
+        ├── 05_analise_escrita.md         # Relatório Módulo 05
+        ├── 06_sintese_parecer.md         # Relatório Módulo 06
+        ├── 07_auditoria_quantitativa.md  # Relatório Módulo 07
+        ├── relatorio_completo.md         # Relatório consolidado unificado
+        ├── tabela_erros.csv              # CSV de erros gramaticais e textuais
+        ├── auditoria_bibliografica.json  # Auditoria de DOIs via Crossref
+        ├── parecer_banca_oficial.pdf     # Parecer Técnico Oficial para Banca
+        ├── apresentacao_animada.html     # Apresentação visual animada (D3.js)
+        ├── apresentacao_completa.pdf     # Slides completos do parecer
+        ├── apresentacao_inicial.pdf      # Slides iniciais do artigo
+        └── infografico.png               # Infográfico síntese
+
+
+================================================================================
+6. CONSIDERAÇÕES DE SEGURANÇA E BOAS PRÁTICAS
+================================================================================
+1. Execução de Subprocessos Segura: Todos os comandos utilizam listas explícitas
+   de argumentos com `shell=False`, mitigando injeção de comandos (command injection).
+2. Prevenção de Path Traversal: Todos os acessos a arquivos e navegação de pastas
+   são validados via `Path.resolve().is_relative_to(BASE_DIR)`.
+3. Sanitização de Conteúdos: Relatórios e códigos HTML gerados passam por limpeza
+   via biblioteca `bleach` para eliminar scripts maliciosos e vetores XSS.
+4. Autenticação e Chaves: Variáveis confidenciais (senhas, API Keys) nunca são
+   embutidas no código ou em imagens Docker, sendo lidas em tempo de execução
+   a partir de variáveis de ambiente.
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================

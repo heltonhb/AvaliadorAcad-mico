@@ -1,0 +1,375 @@
+================================================================================
+                    ANALISECONTAS (ANÁLISE DE CONTAS CONDOMINAIS v7.0)
+     DOCUMENTAÇÃO TÉCNICA, REGRAS DE FUNCIONAMENTO E REGRAS DE NEGÓCIO
+================================================================================
+Data de Atualização: 21/08/2026
+Versão da Aplicação: v7.0 (Architecture: FastAPI REST + React 19 + NotebookLM Core)
+Ambiente Operacional: Linux / macOS / Docker / WSL2
+
+
+================================================================================
+1. DESCRIÇÃO DETALHADA DO APLICATIVO
+================================================================================
+
+1.1. O QUE É O ANALISECONTAS?
+O AnaliseContas é uma plataforma avançada e automatizada de Auditoria de
+Contas Condominiais desenvolvida para analisar prestação de contas de
+condomínios (residenciais, comerciais e mistos), detectar irregularidades,
+verificar conformidade legal e gerar pareceres técnicos formais.
+
+O sistema utiliza o Google NotebookLM como motor de inteligência e raciocínio
+profundo (reasoning engine), complementado por orquestração de pipeline com
+tolerância a falhas, geração de múltiplos artefatos de saída (PDFs formais,
+slides PPTX, dashboards interativos, CSV de erros e apresentações HTML
+animadas) e uma interface moderna em React.
+
+1.2. OBJETIVOS PRINCIPAIS
+- Prover uma auditoria automatizada, consistente e padronizada de contas condominiais.
+- Auditar receitas, despesas, fundos, conformidade legal e consistência financeira.
+- Detectar irregularidades, desvios de finalidade, rateios inconsistentes e
+  problemas de documentação fiscal.
+- Gerar pareceres oficiais formais prontos para apresentação em assembleias
+  condominiais.
+- Permitir a comparação evolutiva entre períodos ou entre diferentes condomínios.
+
+1.3. ARQUITETURA DO SISTEMA
+O aplicativo é estruturado em quatro camadas integradas:
+
+A) FRONTEND (Interface do Usuário):
+   - Single Page Application (SPA) construída em React 19, Vite e Tailwind CSS v4.
+   - Biblioteca de ícones Lucide React e visualizações de dados com Recharts.
+   - Renderização Markdown em tempo real com suporte a tabelas GFM (remark-gfm).
+   - Comunicação assíncrona com a API via Server-Sent Events (SSE) para atualização
+     de logs e barra de progresso em tempo real.
+   - Módulos de Dashboard de Estatísticas, Upload & Início de Análise, Visualizador
+     de Resultados com filtros, Histórico Geral e Módulo Comparativo de Períodos.
+
+B) BACKEND REST API (Servidor de Aplicação):
+   - Desenvolvido em Python com FastAPI e Uvicorn.
+   - Endpoints REST para upload seguro de PDFs, controle do pipeline, leitura de
+     status via SSE, download de artefatos e navegação segura de diretórios.
+   - Camada de segurança com autenticação opcional via API Key (header X-API-Key),
+     prevenção contra Path Traversal, validação estrita de magic bytes de arquivos
+     e sanitização XSS de conteúdos HTML via Bleach.
+
+C) MOTOR DE RACIOCÍNIO FINANCEIRO (Google NotebookLM CLI):
+   - O orquestrador interage com a CLI `notebooklm-py` autenticada.
+   - Cria notebooks dedicados para cada prestação de contas submetida.
+   - Configura a Persona do Consultor Contábio com diretrizes específicas por tipo
+     de condomínio (residencial, comercial, misto).
+   - Raciocínio contextual cumulativo: os relatórios de cada módulo concluído são
+     reinseridos no notebook como novas fontes de conhecimento, permitindo que os
+     módulos seguintes façam validações cruzadas.
+
+D) GERADORES DE ARTEFATOS:
+   - ReportLab: Geração do Parecer Técnico Oficial em PDF diagramado.
+   - Mira Animator (Jinja2 + D3.js + Tailwind): Apresentação animada interativa.
+   - Python-PPTX: Apresentações de slides em formato PowerPoint para assembleias.
+   - Parser CSV: Extração tabular de erros e inconsistências documentais.
+
+
+================================================================================
+2. CONDIÇÕES E PRÉ-REQUISITOS PARA EXECUÇÃO
+================================================================================
+
+2.1. REQUISITOS DE SISTEMA OPERACIONAL E AMBIENTE
+- Sistema Operacional: Linux (Ubuntu 20.04+, Debian, Fedora, Arch) ou macOS. No
+  Windows, requer WSL2 (Windows Subsystem for Linux) ou execução via Docker.
+- Interpretador Python: Versão 3.11 ou superior.
+- Node.js & NPM: Node.js v18+ e npm v9+ (necessários para build/dev do frontend).
+
+2.2. PACOTES E UTILITÁRIOS DE SISTEMA (LINUX/APT)
+O pipeline necessita de ferramentas de linha de comando para manipular PDFs e OCR:
+- `poppler-utils` (fornece `pdftotext` para verificação rápida de texto e OCR).
+- `ghostscript` (fornece `gs` para otimização e compressão de PDFs pesados >100MB).
+- `libnotify-bin` (opcional, para envio de notificações desktop via `notify-send`).
+
+Comando de instalação no Ubuntu/Debian:
+  sudo apt-get update && sudo apt-get install -y poppler-utils ghostscript curl
+
+2.3. DEPENDÊNCIAS PYTHON (requirements.txt)
+As dependências do backend Python devem ser instaladas no ambiente virtual:
+- fastapi >= 0.110.0        (Framework web REST)
+- uvicorn[standard] >= 0.28.0 (Servidor ASGI de alta performance)
+- pydantic >= 2.0           (Validação e esquemas de dados)
+- python-multipart >= 0.0.9 (Suporte a upload de arquivos na API)
+- pandas >= 2.0             (Manipulação tabular de dados)
+- python-pptx >= 1.0        (Geração de slides PowerPoint)
+- bleach >= 6.0             (Sanitização de HTML contra vulnerabilidades XSS)
+- bcrypt >= 4.0             (Hash seguro de senhas)
+- jinja2 >= 3.1             (Motor de templates para HTMLs animados)
+- python-dotenv >= 1.0      (Carregamento de variáveis de ambiente do .env)
+- httpx >= 0.27.0           (Cliente HTTP assíncrono)
+- reportlab >= 4.0          (Composição vetorial de relatórios formais em PDF)
+
+Instalação:
+  pip install -r requirements.txt
+
+2.4. MOTOR NOTEBOOKLM (CLI E AUTENTICAÇÃO)
+O aplicativo depende da ferramenta de linha de comando `notebooklm` instalada e
+autenticada no perfil do usuário local:
+- Instalação via UV / Pip:
+    uv tool install notebooklm-py
+    # ou: pip install notebooklm-py
+- Autenticação prévia obrigatória:
+    notebooklm login
+  (Gera credenciais/cookies de sessão salvos no diretório local `~/.notebooklm/`.)
+
+2.5. VARIÁVEIS DE AMBIENTE (.env)
+Configurações suportadas pelo sistema (arquivo `.env` na raiz do app):
+- `ANALISE_BASE_DIR`: Diretório raiz onde residem as pastas `uploads` e `Arquivos das bancas`.
+- `ANALISE_PASSWORD`: Senha de proteção da API e frontend (Header `X-API-Key`).
+- `ALLOWED_ORIGINS`: Origens autorizadas para CORS (ex: `http://localhost:5173,http://localhost:8000`).
+- `API_PORT`: Porta TCP do backend FastAPI (padrão: 8000).
+- `FRONTEND_PORT`: Porta TCP do servidor de desenvolvimento Vite (padrão: 5173).
+- `MAX_UPLOAD_MB`: Limite máximo para upload de arquivos PDF (padrão: 100 MB).
+- `WAIT_SOURCE_TIMEOUT`: Tempo limite para indexação do PDF no NotebookLM (padrão: 240s).
+- `GENERATE_TIMEOUT`: Tempo limite para geração de artefatos de IA (padrão: 600s).
+- `RUN_CMD_TIMEOUT`: Timeout padrão para execução de comandos do sistema (padrão: 300s).
+- `ANALISE_DEFAULT_DOMAIN`: Tipo de condomínio padrão (`res`, `com`, `mis`).
+- `ANALISE_DEFAULT_MODE`: Modo padrão de execução (`full`, `lite`).
+
+2.6. MODOS DE INICIALIZAÇÃO DA APLICAÇÃO
+A) Modo Desenvolvimento (API FastAPI + Vite Dev Server):
+   ./start.sh dev
+   - API disponível em: http://localhost:8000
+   - Interface Web em: http://localhost:5173
+   - Documentação Swagger da API em: http://localhost:8000/docs
+
+B) Modo Produção (FastAPI servindo o bundle compilado do Frontend):
+   cd frontend && npm run build && cd ..
+   ./start.sh build
+   - Aplicação unificada servida em: http://localhost:8000
+
+C) Modo API Exclusivo (Headless):
+   ./start.sh api
+
+D) Execução Direta via CLI (Pipeline em Background / Terminal):
+   python3 -m pipeline.runner /caminho/prestacao_contas.pdf --domain res --mode full --resume
+
+E) Execução via Docker Compose:
+   docker compose up -d
+
+
+================================================================================
+3. REGRAS DE FUNCIONAMENTO (WORKFLOW OPERACIONAL)
+================================================================================
+
+3.1. FLUXO DE UPLOAD E VALIDAÇÃO
+1. Recepção do Arquivo: O arquivo é enviado via endpoint `/api/upload`.
+2. Validação de Magic Bytes: O sistema inspeciona os primeiros 1024 bytes para
+   confirmar a assinatura `%PDF`, rejeitando executáveis renomeados ou arquivos corrompidos.
+3. Sanitização de Nome: O nome do arquivo é limpo, eliminando caracteres especiais,
+   espaços e sequências de path traversal (`../`).
+4. Streaming em Chunks: O upload é gravado no disco em blocos de 1 MB, prevenindo
+   sobrecarga de memória RAM no servidor.
+
+3.2. PRÉ-PROCESSAMENTO E PRE-FLIGHT
+1. Otimização de PDFs Grandes: Se o arquivo ultrapassar 100 MB, o Ghostscript é
+   acionado automaticamente (`-dPDFSETTINGS=/ebook`) para comprimir imagens em ~150 DPI,
+   preservando o texto vetorial integral para o motor de IA.
+2. Checagem de OCR: O utilitário `pdftotext` verifica se o PDF contém texto legível.
+   Se contiver menos de 100 caracteres extraíveis, um alerta de documento escaneado
+   é emitido no log.
+3. Lock de Diretório (`fcntl`): O pipeline cria um bloqueio exclusivo no diretório de
+   saída. Caso outro processo tente analisar o mesmo documento simultaneamente, a
+   execução é impedida para evitar condições de corrida (race conditions).
+
+3.3. CRIAÇÃO E CONFIGURAÇÃO DO NOTEBOOKLM
+1. Criação do Notebook: O pipeline cria um notebook dedicado intitulado `Auditoria Condominial: <nome_do_arquivo>`.
+2. Injeção de Persona: Configura a persona do consultor contábio no NotebookLM com as
+   diretrizes do tipo de condomínio selecionado.
+3. Upload do PDF: O PDF otimizado é carregado como fonte primária do notebook.
+4. Indexação com Backoff Exponencial: O sistema aguarda até que o status da fonte
+   esteja marcado como `ready`.
+
+3.4. EXECUÇÃO MODULAR E RACIOCÍNIO ACUMULATIVO
+1. Os módulos de análise (00 a 07) são acionados sequencialmente.
+2. A cada módulo concluído com sucesso, o arquivo Markdown gerado é adicionado de
+   volta ao NotebookLM como fonte secundária (`add_source`). Isso permite que os
+   módulos posteriores (como o Módulo 06 de Parecer Final) acessem o histórico
+   completo de achados e cruzem informações com profundidade.
+3. Sistema de Checkpoint (`.checkpoint.json`): Cada etapa concluída é persistida
+   no disco. Em caso de queda de energia, limite de taxa (rate limit) ou interrupção,
+   a flag `--resume` retoma a execução exatamente do último módulo pendente, sem
+   reprocessar etapas já finalizadas.
+
+3.5. GERAÇÃO DE ARTEFATOS E EXPORTAÇÃO
+1. Tabela CSV de Erros: O relatório do Módulo 05 é processado para extrair a tabela
+   de inconsistências e salvar em `tabela_erros.csv`.
+2. Relatório Consolidado: Todos os arquivos Markdown são compilados em `relatorio_completo.md`.
+3. Parecer Técnico Oficial em PDF: Gerado via ReportLab com cabeçalho institucional,
+   quadros de notas, rubricas, pontos positivos, irregularidades e rodapé paginado.
+4. Apresentação Animada HTML: Compilada via Jinja2 e D3.js no arquivo `apresentacao_animada.html`.
+5. Slides de Apresentação (PPTX / PDF): Gera apresentação completa com estrutura
+   padronizada de 15 slides para apresentação em assembleias.
+6. Infográfico Visual: Gera artefato gráfico com diagramação dos indicadores.
+7. Metadados Estruturados (`score.json`): Persiste nota final, decisão e resumo para
+   o frontend e operações de comparação.
+
+
+================================================================================
+4. REGRAS DE NEGÓCIOS E CRITÉRIOS AVALIATIVOS
+================================================================================
+
+4.1. TIPOS DE CONDOMÍNIO E DIRETRIZES ESPECÍFICAS
+O aplicativo suporta três perfis de condomínio:
+
+A) RESIDENCIAL (`res` - Residencial):
+   - Legislação: Lei 4.591/64 e Código Civil (arts. 1.330 a 1.353).
+   - Critérios de Auditoria:
+     * Rateio por fração ideal, fundo de reserva (mínimo 5% da receita).
+     * Condições de moradores, áreas de uso comum.
+     * Conformidade com convenção condominial e regimento interno.
+     * Inadimplência, custo por m², manutenção de elevadores, portaria 24h.
+
+B) COMERCIAL (`com` - Comercial / Corporativo):
+   - Legislação: Lei 4.591/64 + legislação trabalhista e comercial aplicável.
+   - Critérios de Auditoria:
+     * Locatários vs. proprietários, custos operacionais.
+     * TI e infraestrutura de Rede, custos de compartimentação e fit-outs.
+     * Contrato de administração com empresa especializada.
+     * SLA de manutenção predial, certificações e conformidades de segurança.
+
+C) MISTO (`mis` - Residencial + Comercial):
+   - Legislação: Conforme aplicável a ambos os regimes.
+   - Critérios de Auditoria:
+     * Separação clara de custos entre áreas residenciais e comerciais.
+     * Rateio diferenciado: comerciais pagam proporcionalmente mais?
+     * Áreas de uso comum: como são rateadas entre finalidades diferentes?
+     * Conflitos potenciais: horários, ruído, segurança diferenciada.
+
+4.2. MODOS DE OPERAÇÃO
+- Modo FULL (Completo): Executa todos os 8 módulos (00 a 07) + artefatos.
+- Modo LITE (Rápido): Executa 6 módulos (pula Módulo 03 - Despesas e Módulo 07 - Quantitativo).
+  * REGRA FUNDAMENTAL: O Módulo 02 (Conformidade Legal e Assembleia) NUNCA é pulado.
+
+4.3. OS 8 MÓDULOS DE ANÁLISE
+
+- MÓDULO 00 — Estrutura do Documento:
+  Mapeia a estrutura da prestação de contas, verificação de seções obrigatórias
+  ausentes, conformidade formal e organização dos demonstrativos.
+
+- MÓDULO 01 — Auditoria de Receitas:
+  Analisa todas as fontes de receita: taxa condominial, fundos (reserva e
+  manutenção), multas e juros, aluguéis de áreas comuns, rendimentos financeiros.
+  Verifica inadimplência e regularidade dos repasses.
+
+- MÓDULO 02 — Conformidade Legal e Assembleia:
+  Verifica conformidade com Lei 4.591/64, ato de assembleia, parecer do conselho
+  fiscal, conformidade tributária e regimento interno.
+
+- MÓDULO 03 — Auditoria de Despesas:
+  Analisa despesas fixas (folha, energia, água, seguro, IPTU) e variáveis
+  (manutenção, obras, jurídicas). Verifica legitimidade, documentação e
+  proporcionalidade.
+
+- MÓDULO 04 — Consistência Lógica e Financeira:
+  Cruzamento de receitas, despesas e saldos. Verificação orçamento vs. executado,
+  consistência de fundos e detecção de anomalias numéricas.
+
+- MÓDULO 05 — Qualidade Documental:
+  Avalia clareza, terminologia contábil, organização dos demonstrativos e
+  informações ausentes ou insuficientes.
+
+- MÓDULO 06 — Parecer Final:
+  Consolida a avaliação global: veredito (Aprovado / Aprovado com Ressalvas /
+  Reprovado), nota 0-10, recomendações priorizadas e parecer à assembleia.
+
+- MÓDULO 07 — Auditoria Quantitativa Profunda:
+  Verificação matemática minuciosa: totais conferidos, rateio por unidade,
+  saldos de fundos, variações mensais e valores suspeitos.
+
+4.4. RUBRICA DE AVALIAÇÃO E NOTAS (ESCALA DE 0 A 10)
+- [9.0 a 10.0] EXCELENTE:
+  Contas transparentes, bem documentadas e regularizadas.
+  Aprovadas sem ressalvas.
+- [7.0 a 8.9] BOM:
+  Contas aceitáveis com pequenas pendências ou melhorias pontuais.
+  Aprovadas com ressalvas menores.
+- [5.0 a 6.9] REGULAR:
+  Contas com inconsistências significativas que precisam ser esclarecidas.
+  Exigem esclarecimentos e correções.
+- [3.0 a 4.9] FRACO:
+  Irregularidades graves, despesas sem respaldo, problemas estruturais.
+  Exigem correções urgentes.
+- [0.0 a 2.9] INADEQUADO:
+  Fraudess, desvio de finalidade, ilegalidade comprovada.
+  Reprovação das contas.
+
+4.5. DECISÕES FORMAIS
+- `Aprovado` (Aprovado sem alterações)
+- `Aprovado com Ressalvas` (Aprovado com pendências a resolver)
+- `Reprovado` (Reprovado — exige nova prestação de contas)
+
+
+================================================================================
+5. ESTRUTURA DE DIRETÓRIOS E ARQUIVOS GERADOS
+================================================================================
+
+AnaliseContas/
+├── app/
+│   ├── api.py                    # Backend FastAPI REST (Rotas, SSE, Endpoints)
+│   ├── artifacts.py              # Geradores de CSV, PPTX e HTML Mira Animator
+│   ├── prompts.py                # Prompts estruturados dos módulos 00-07 e personas
+│   ├── security.py               # Sanitização HTML, validação de PDF e autenticação
+│   ├── utils.py                  # Parsers de notas, expressões regulares e helpers
+│   ├── start.sh                  # Script unificado de inicialização (dev/build/api)
+│   ├── requirements.txt          # Dependências Python
+│   ├── Dockerfile                # Configuração do container Docker de produção
+│   ├── docker-compose.yml        # Orquestração do container e volumes
+│   ├── pipeline/
+│   │   ├── runner.py             # Orquestrador do pipeline (CLI e background runner)
+│   │   ├── notebooklm.py         # Interface de baixo nível com o NotebookLM CLI
+│   │   ├── bibliography.py       # (Desabilitado para contas condominiais)
+│   │   ├── pdf_report.py         # Emissor do Parecer Oficial em PDF
+│   │   ├── checkpoint.py         # Mecanismo de persistência e retomada de estado
+│   │   ├── lock.py               # Bloqueio de concorrência por diretório (fcntl)
+│   │   └── utils.py              # Execução segura de subprocessos, OCR e Ghostscript
+│   └── frontend/
+│       ├── package.json          # Dependências Node.js / React
+│       ├── vite.config.js        # Configuração do Vite
+│       └── src/
+│           ├── App.jsx           # Rotas e layout principal
+│           ├── api.js            # Cliente HTTP com interceptors e SSE
+│           ├── pages/            # Dashboard, Upload, Results, History, Compare
+│           └── components/       # Layout, DirectoryPicker, Toast, ErrorBoundary
+├── uploads/                      # Armazenamento temporário de PDFs enviados
+└── Arquivos das bancas/          # Diretório padrão de saída das análises
+    └── peer_review_<nome_condominio>/
+        ├── .checkpoint.json              # Estado e progresso dos módulos
+        ├── pipeline_status.json          # Status atual do passo em execução
+        ├── score.json                    # Metadados estruturados (Nota e Decisão)
+        ├── 00_estrutura_documento.md     # Relatório Módulo 00
+        ├── 01_receitas.md                # Relatório Módulo 01
+        ├── 02_conformidade_legal.md      # Relatório Módulo 02
+        ├── 03_despesas.md                # Relatório Módulo 03
+        ├── 04_consistencia_financeira.md # Relatório Módulo 04
+        ├── 05_qualidade_documental.md    # Relatório Módulo 05
+        ├── 06_parecer_final.md           # Relatório Módulo 06
+        ├── 07_auditoria_quantitativa.md  # Relatório Módulo 07
+        ├── relatorio_completo.md         # Relatório consolidado unificado
+        ├── tabela_erros.csv              # CSV de inconsistências documentais
+        ├── parecer_auditoria_oficial.pdf # Parecer Oficial em PDF
+        ├── apresentacao_animada.html     # Apresentação visual animada (D3.js)
+        ├── apresentacao_completa.pdf     # Slides completos do parecer
+        ├── apresentacao_inicial.pdf      # Slides iniciais do documento
+        └── infografico.png               # Infográfico síntese
+
+
+================================================================================
+6. CONSIDERAÇÕES DE SEGURANÇA E BOAS PRÁTICAS
+================================================================================
+1. Execução de Subprocessos Segura: Todos os comandos utilizam listas explícitas
+   de argumentos com `shell=False`, mitigando injeção de comandos (command injection).
+2. Prevenção de Path Traversal: Todos os acessos a arquivos e navegação de pastas
+   são validados via `Path.resolve().is_relative_to(BASE_DIR)`.
+3. Sanitização de Conteúdos: Relatórios e códigos HTML gerados passam por limpeza
+   via biblioteca `bleach` para eliminar scripts maliciosos e vetores XSS.
+4. Autenticação e Chaves: Variáveis confidenciais (senhas, API Keys) nunca são
+   embutidas no código ou em imagens Docker, sendo lidas em tempo de execução
+   a partir de variáveis de ambiente.
+
+================================================================================
+FIM DO DOCUMENTO
+================================================================================

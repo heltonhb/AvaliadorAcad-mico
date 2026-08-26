@@ -1,0 +1,198 @@
+# CI/CD Pipeline for AnaliseTextos
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================================
+  # Lint & Type Check
+  # ============================================================
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff mypy
+
+      - name: Run ruff (linting)
+        run: ruff check .
+
+      - name: Run mypy (type checking)
+        run: mypy api.py auth.py security.py utils.py pipeline/
+
+  # ============================================================
+  # Security Scan
+  # ============================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install bandit safety
+
+      - name: Run bandit (static security analysis)
+        run: bandit -r . -f json -o bandit-report.json || true
+
+      - name: Run safety (dependency vulnerability scan)
+        run: safety check --json -o safety-report.json || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # ============================================================
+  # Tests
+  # ============================================================
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            poppler-utils ghostscript
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend && npm ci --no-audit --no-fund
+
+      - name: Build frontend
+        run: |
+          cd frontend && npm run build
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --tb=short --cov=api --cov=auth --cov=security --cov=utils --cov=pipeline --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  # ============================================================
+  # Docker Build
+  # ============================================================
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, security, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.backend
+          tags: analise-textos/backend:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          tags: analise-textos/worker:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test backend image
+        run: |
+          docker run --rm -d --name test_backend -p 8000:8000 analise-textos/backend:latest
+          sleep 10
+          curl -f http://localhost:8000/api/health/live
+          docker stop test_backend
+
+      - name: Test worker image
+        run: |
+          # Worker needs Redis, just test it starts
+          docker run --rm --name test_worker analise-textos/worker:latest celery -A celery_app inspect ping || true
+
+  # ============================================================
+  # Deploy (placeholder for production deployment)
+  # ============================================================
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "Deploy to production would happen here"
+          # Add your deployment logic (Kubernetes, Docker Swarm, etc.)
