@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir uv && \
 ENV PATH="/root/.local/bin:$PATH"
 
 # Copy application code (excludes .env via .dockerignore)
-COPY . .
+COPY app/ . .
 
 # Frontend build: O Nginx monta frontend/dist como volume,
 # então NÃO precisamos buildar aqui. O api.py serve o frontend
