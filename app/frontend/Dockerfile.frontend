@@ -8,6 +8,8 @@ RUN npm run build   # genera la pasta /app/dist
 
 # ---- Etapa de produção (servir com um servidor leve) ----
 FROM nginx:alpine
+# Install CA certificates to verify SSL connections to backend
+RUN apk add --no-cache ca-certificates
 # Remove default nginx config and replace with our own
 RUN rm /etc/nginx/conf.d/default.conf
 COPY app/frontend/nginx.conf /etc/nginx/conf.d/default.conf
