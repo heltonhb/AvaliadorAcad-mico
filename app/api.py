@@ -1390,6 +1390,21 @@ if _frontend_dist.exists():
         raise HTTPException(status_code=404, detail="Frontend não construído")
 
 
+import base64
+from auth import get_notebooklm_profile_path
+
+env_b64 = os.environ.get("NOTEBOOKLM_STORAGE_STATE_BASE64")
+if env_b64:
+    try:
+        profile_path = get_notebooklm_profile_path("default")
+        profile_path.mkdir(parents=True, exist_ok=True)
+        storage_file = profile_path / "storage_state.json"
+        decoded = base64.b64decode(env_b64).decode("utf-8")
+        storage_file.write_text(decoded, encoding="utf-8")
+        logger.info("Restaurado storage_state.json a partir da variável de ambiente NOTEBOOKLM_STORAGE_STATE_BASE64")
+    except Exception as e:
+        logger.error(f"Falha ao restaurar storage_state.json: {e}")
+
 # =====================================================================
 # MAIN
 # =====================================================================
