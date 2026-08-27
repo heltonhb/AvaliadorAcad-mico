@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 import structlog
+import uvicorn
 from fastapi import FastAPI, Request, Response, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
@@ -339,6 +340,9 @@ PIPELINE_RATE_LIMIT = os.environ.get("PIPELINE_RATE_LIMIT", "5/minute")
 @limiter.limit(AUTH_RATE_LIMIT)
 async def auth_register(request: Request, body: RegisterBody):
     """Cria nova conta de usuário."""
+    if os.environ.get("DISABLE_REGISTRATION", "false").lower() == "true":
+        raise HTTPException(status_code=403, detail="Novos registros estão desativados")
+        
     try:
         user = create_user(body.email, body.password, body.name)
     except ValueError as e:
