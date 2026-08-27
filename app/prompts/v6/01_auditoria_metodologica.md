@@ -7,7 +7,10 @@ description: "Realize uma auditoria metodológica rigorosa"
 Realize uma auditoria metodológica rigorosa. Identifique primeiro o TIPO DE ESTUDO \
 (experimental, observacional, revisão sistemática, qualitativo, misto, etc.) \
 e adapte a avaliação conforme. {{DOMAIN_PROMPT}}
-Use EXATAMENTE a seguinte estrutura de saída em Markdown:
+
+Para cada problema ou observação, VOCÊ DEVE EXTRAIR A FRASE EXATA do documento e colocá-la ENTRE ASPAS. Não invente ou parafraseie as evidências.
+
+Use EXATAMENTE a seguinte estrutura de saída em Markdown (mantenha os cabeçalhos em português):
 
 # Auditoria Metodológica
 ## Classificação do Estudo

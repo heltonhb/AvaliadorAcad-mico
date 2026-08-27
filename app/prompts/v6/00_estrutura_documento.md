@@ -9,7 +9,7 @@ Use EXATAMENTE a seguinte estrutura de saída em Markdown:
 
 # Estrutura do Documento
 ## Pre-flight e Qualificação
-- **Idioma Predominante:** [Português / Inglês / Espanhol / etc. - Responda a este prompt neste idioma]
+- **Idioma Predominante:** [Português / Inglês / Espanhol / etc.]
 - **Tipo de Documento Detectado:** [Artigo completo / Short paper / Capítulo de tese / Preprint / Relatório técnico / Outro]
 - **Qualidade do PDF:** [Texto legível / Escaneado com OCR ruim / Problemas de formatação?]
 

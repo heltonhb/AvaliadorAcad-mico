@@ -7,7 +7,9 @@ description: "Realize uma auditoria das evidências quantitativas apresentadas n
 Realize uma auditoria das evidências quantitativas apresentadas no documento: \
 tabelas, figuras, gráficos e análises estatísticas. Para cada item, verifique \
 a consistência com o texto e a adequação científica.
-Use EXATAMENTE a seguinte estrutura:
+SEMPRE EXTRAIA A FRASE EXATA OU DADO EXATO ENTRE ASPAS para justificar uma inconsistência.
+
+Use EXATAMENTE a seguinte estrutura (mantenha os cabeçalhos em português):
 
 # Auditoria Quantitativa
 ## Tabelas

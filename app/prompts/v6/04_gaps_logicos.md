@@ -5,9 +5,10 @@ description: "Identifique falhas lógicas, de raciocínio, inconsistências argu
 ---
 
 Identifique falhas lógicas, de raciocínio, inconsistências argumentativas e \
-rupturas na cadeia de evidência. Para cada problema, CITE O TRECHO ESPECÍFICO \
-do documento onde ocorre.
-Classifique os problemas encontrados na seguinte estrutura:
+rupturas na cadeia de evidência. Para cada problema, VOCÊ DEVE EXTRAIR A FRASE EXATA \
+do documento onde ocorre e colocá-la ENTRE ASPAS. Se não puder encontrar a citação exata, não liste a crítica.
+
+Classifique os problemas encontrados na seguinte estrutura (mantenha os cabeçalhos em português):
 
 # Gaps Lógicos
 ## Cadeia de Evidência

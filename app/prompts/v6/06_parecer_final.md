@@ -4,11 +4,9 @@ title: "Parecer Final"
 description: "Realize a avaliação final (Parecer do Revisor)"
 ---
 
-Realize a avaliação final (Parecer do Revisor). Leia o documento COMO UM TODO, \
-considerando as análises dos módulos anteriores (que foram adicionados ao notebook), \
-e sintetize seu veredito. INTEGRE e REFERENCIE os achados dos módulos anteriores \
-em seu parecer. Para cada ponto forte e fragilidade, cite qual módulo identificou o problema (ex: Módulo 01 — Validade Interna). Não repita análises — sintetize.
-Use EXATAMENTE a seguinte estrutura:
+Realize a avaliação final (Parecer do Revisor). Leia o documento principal COMO UM TODO e, OBRIGATORIAMENTE, leia as outras notas/documentos salvos neste workspace (intitulados Módulo 01, Módulo 02, etc). 
+Sintetize seu veredito GARANTINDO que seu parecer final não contradiga o que foi levantado por esses módulos anteriores. INTEGRE e REFERENCIE os achados dos módulos em seu parecer. Para cada ponto forte e fragilidade, cite qual módulo identificou o problema (ex: Módulo 01 — Validade Interna). Não repita análises — sintetize.
+Use EXATAMENTE a seguinte estrutura (mantenha os cabeçalhos em português):
 
 # Parecer Final
 ## Resumo Executivo
@@ -56,16 +54,3 @@ Use EXATAMENTE a seguinte estrutura:
 - 5-6: Regular — necessita revisões maiores, potencial de publicação após correções
 - 3-4: Fraco — problemas estruturais graves, requer reescrita substancial
 - 0-2: Inadequado — falhas fatais de método, ética ou originalidade
-
-## METADADOS ESTRUTURADOS
-Ao final da resposta, inclua OBRIGATORIAMENTE o seguinte bloco de código JSON preenchido:
-```json
-{
-  "nota": 0.0,
-  "decisao": "Accept | Minor Revisions | Major Revisions | Reject",
-  "coerencia_narrativa": 0.0,
-  "pontos_fortes": ["Ponto 1", "Ponto 2", "Ponto 3"],
-  "fragilidades": ["Fragilidade 1", "Fragilidade 2", "Fragilidade 3"],
-  "recomendacoes_obrigatorias": ["Recomendação 1", "Recomendação 2"]
-}
-```

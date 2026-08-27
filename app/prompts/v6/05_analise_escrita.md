@@ -5,9 +5,8 @@ description: "Faça uma revisão textual minuciosa cobrindo gramática, estilo a
 ---
 
 Faça uma revisão textual minuciosa cobrindo gramática, estilo acadêmico e clareza.
-Detecte o idioma do documento e produza a análise e correções nesse mesmo idioma.
-ATENÇÃO: Não tente adivinhar a linha exata. Identifique o local pelo NOME DA SEÇÃO.
-Use a seguinte estrutura de tabela Markdown:
+ATENÇÃO: Não tente adivinhar a linha exata. Identifique o local pelo NOME DA SEÇÃO e OBRIGATORIAMENTE cite o "Trecho Original" com a frase exata entre aspas.
+Use a seguinte estrutura de tabela Markdown (mantenha os cabeçalhos em português):
 
 # Análise de Escrita
 ## Erros Textuais
