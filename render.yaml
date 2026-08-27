@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: analisetextos-backend
+    env: docker
+    plan: free
+    dockerfilePath: app/Dockerfile.backend
+    envVars:
+      - key: JWT_SECRET
+        fromSecret: jwt_secret
+      - key: REDIS_URL
+        fromSecret: redis_url
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: text
+    autoDeploy: true
+    healthCheckPath: /api/health/live
+
+  - type: worker
+    name: analisetextos-worker
+    env: docker
+    plan: free
+    dockerfilePath: app/Dockerfile.worker
+    envVars:
+      - key: JWT_SECRET
+        fromSecret: jwt_secret
+      - key: REDIS_URL
+        fromSecret: redis_url
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: text
+    autoDeploy: true
+
+  - type: web
+    name: analisetextos-frontend
+    env: docker
+    plan: free
+    dockerfilePath: app/frontend/Dockerfile.frontend
+    envVars:
+      - key: VITE_API_URL
+        value: https://analisetextos-backend.onrender.com
+    autoDeploy: true
+
+databases:
+  - name: analisetextos-redis
+    plan: free
+    ipAllowList: []   # permite acesso de serviços dentro da mesma conta
