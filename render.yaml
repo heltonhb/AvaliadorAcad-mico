@@ -1,3 +1,13 @@
+envVarGroups:
+  - name: analisetextos-secrets
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromDatabase:
+          name: analisetextos-redis
+          property: connectionString
+
 services:
   - type: web
     name: analisetextos-backend
@@ -5,10 +15,7 @@ services:
     plan: free
     dockerfilePath: app/Dockerfile.backend
     envVars:
-      - key: JWT_SECRET
-        fromSecret: jwt_secret
-      - key: REDIS_URL
-        fromSecret: redis_url
+      - fromGroup: analisetextos-secrets
       - key: LOG_LEVEL
         value: INFO
       - key: LOG_FORMAT
@@ -22,10 +29,7 @@ services:
     plan: free
     dockerfilePath: app/Dockerfile.worker
     envVars:
-      - key: JWT_SECRET
-        fromSecret: jwt_secret
-      - key: REDIS_URL
-        fromSecret: redis_url
+      - fromGroup: analisetextos-secrets
       - key: LOG_LEVEL
         value: INFO
       - key: LOG_FORMAT
