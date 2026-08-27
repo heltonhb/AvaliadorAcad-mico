@@ -349,7 +349,7 @@ async def auth_register(request: Request, body: RegisterBody):
     response = JSONResponse({"user": user, "access_token": token})
     response.set_cookie(
         key="access_token", value=token, httponly=True,
-        samesite="lax", max_age=JWT_EXPIRY_HOURS * 3600,
+        samesite="lax", secure=True, max_age=JWT_EXPIRY_HOURS * 3600,
     )
     return response
 @app.post("/api/auth/login")
@@ -364,7 +364,7 @@ async def auth_login(request: Request, body: LoginBody):
     response = JSONResponse({"user": user, "access_token": token})
     response.set_cookie(
         key="access_token", value=token, httponly=True,
-        samesite="lax", max_age=JWT_EXPIRY_HOURS * 3600,
+        samesite="lax", secure=True, max_age=JWT_EXPIRY_HOURS * 3600,
     )
     return response
 
