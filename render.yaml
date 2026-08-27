@@ -1,8 +1,17 @@
+databases:
+  - name: analisetextos-redis
+    plan: free
+    ipAllowList: []
+
 envVarGroups:
   - name: analisetextos-secrets
     envVars:
       - key: JWT_SECRET
         generateValue: true
+      - key: REDIS_URL
+        fromDatabase:
+          name: analisetextos-redis
+          property: connectionString
 
 services:
   - type: web
@@ -12,10 +21,6 @@ services:
     dockerfilePath: app/Dockerfile.backend
     envVars:
       - fromGroup: analisetextos-secrets
-      - key: REDIS_URL
-        fromDatabase:
-          name: analisetextos-redis
-          property: connectionString
       - key: LOG_LEVEL
         value: INFO
       - key: LOG_FORMAT
@@ -30,10 +35,6 @@ services:
     dockerfilePath: app/Dockerfile.worker
     envVars:
       - fromGroup: analisetextos-secrets
-      - key: REDIS_URL
-        fromDatabase:
-          name: analisetextos-redis
-          property: connectionString
       - key: LOG_LEVEL
         value: INFO
       - key: LOG_FORMAT
@@ -46,11 +47,7 @@ services:
     plan: free
     dockerfilePath: app/frontend/Dockerfile.frontend
     envVars:
+      - fromGroup: analisetextos-secrets
       - key: VITE_API_URL
         value: https://analisetextos-backend.onrender.com
     autoDeploy: true
-
-databases:
-  - name: analisetextos-redis
-    plan: free
-    ipAllowList: []   # permite acesso de serviços dentro da mesma conta
