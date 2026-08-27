@@ -2,13 +2,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 COPY app/frontend/package*.json ./
-RUN npm ci
+RUN npm install
 COPY app/frontend/ ./
-RUN npm run build   # genera la pasta /app/dist (o .output si es Vite)
+RUN npm run build   # genera la pasta /app/dist
 
 # ---- Etapa de producción (servir con un servidor leve) ----
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-# Copie un nginx.conf personalizado si necesita reescritura para SPA (opcional)
 EXPOSE 80
 CMD [\"nginx\", \"-g\", \"daemon off;\"]
