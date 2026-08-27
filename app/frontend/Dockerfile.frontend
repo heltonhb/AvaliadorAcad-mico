@@ -12,12 +12,7 @@ FROM nginx:alpine
 RUN apk add --no-cache ca-certificates && update-ca-certificates
 # Remove any existing config files
 RUN rm -rf /etc/nginx/conf.d/*
-COPY app/frontend/nginx.conf /etc/nginx/templates/default.conf.template
+COPY app/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 EXPOSE 80
-# nginx:alpine image automatically runs envsubst on .template files
-# in /etc/nginx/templates/ and outputs to /etc/nginx/conf.d/
-# We only need BACKEND_URL to be substituted (preserve nginx variables like $uri)
-ENV BACKEND_URL=https://analisetextos-backend.onrender.com
-ENV NGINX_ENVSUBST_FILTER=BACKEND_URL
 CMD ["nginx", "-g", "daemon off;"]
