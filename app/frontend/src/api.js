@@ -91,4 +91,25 @@ export const api = {
   // NotebookLM Authentication
   notebooklmAccountInfo: () => request('/notebooklm/account/info'),
   notebooklmAuthStatus: () => request('/notebooklm/auth/status'),
+
+  // Download analysis as ZIP (triggers browser download)
+  downloadAnalysisZip: async (analysisId, { cleanup = false } = {}) => {
+    const cleanupParam = cleanup ? '?cleanup=true' : '';
+    const res = await fetch(`${API_BASE}/analyses/${encodeURIComponent(analysisId)}/download${cleanupParam}`, {
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Erro no download' }));
+      throw new Error(err.detail || `Erro ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${analysisId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };

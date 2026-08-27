@@ -1130,6 +1130,49 @@ async def delete_analysis(analysis_id: str, request: Request):
     return {"ok": True, "deleted": analysis_id}
 
 
+@app.get("/api/analyses/{analysis_id}/download")
+async def download_analysis_zip(analysis_id: str, request: Request, cleanup: bool = False):
+    """Empacota todos os artefatos da análise em um ZIP e retorna para download.
+    Se cleanup=true, remove os arquivos do servidor após gerar o ZIP."""
+    import zipfile
+    import io
+
+    user = _get_user(request)
+    analysis_dir = _get_analysis_dir(analysis_id, user["id"])
+    if not analysis_dir or not analysis_dir.exists():
+        raise HTTPException(status_code=404, detail="Análise não encontrada")
+
+    # Validação anti path-traversal
+    try:
+        analysis_dir.resolve().relative_to(BASE_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Acesso negado")
+
+    # Gerar ZIP em memória
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for file_path in sorted(analysis_dir.rglob("*")):
+            if file_path.is_file() and not file_path.name.startswith("."):
+                arcname = str(file_path.relative_to(analysis_dir.parent))
+                zf.write(file_path, arcname)
+
+    zip_buffer.seek(0)
+    zip_filename = f"{analysis_id}.zip"
+
+    # Limpar arquivos do servidor após gerar o ZIP (se solicitado)
+    if cleanup:
+        try:
+            shutil.rmtree(analysis_dir)
+            logger.info("analysis_cleanup", analysis_id=analysis_id, user_id=user["id"])
+        except Exception as e:
+            logger.warning("analysis_cleanup_failed", analysis_id=analysis_id, error=str(e))
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
+    )
+
 # =====================================================================
 # SOURCES & BROWSE
 # =====================================================================

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Upload as UploadIcon, FileText, Play, CheckCircle, XCircle, Loader2,
   ArrowLeft, SkipForward, Clock, FolderOpen, History, File, ChevronDown,
-  ChevronRight, Zap, Timer, AlertTriangle, CheckCircle2, Rocket
+  ChevronRight, Zap, Timer, AlertTriangle, CheckCircle2, Rocket, Download
 } from 'lucide-react';
 import DirectoryPicker from '../components/DirectoryPicker';
 import { api } from '../api';
@@ -300,13 +300,28 @@ function PipelineRunningView({ progress, mode, logEndRef }) {
 /* ═══════════════════════════════════════════════════════════════
    PIPELINE DONE VIEW
    ═══════════════════════════════════════════════════════════════ */
-function PipelineDoneView({ onResults }) {
+function PipelineDoneView({ onResults, analysisId, autoDownloading }) {
   const [showConfetti, setShowConfetti] = useState(true);
+  const [manualDownloading, setManualDownloading] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     const t = setTimeout(() => setShowConfetti(false), 3000);
     return () => clearTimeout(t);
   }, []);
+
+  const handleManualDownload = async () => {
+    if (!analysisId) return;
+    setManualDownloading(true);
+    try {
+      await api.downloadAnalysisZip(analysisId);
+      toast('✅ Download concluído!', 'success');
+    } catch (err) {
+      toast(`Erro no download: ${err.message}`, 'error');
+    } finally {
+      setManualDownloading(false);
+    }
+  };
 
   return (
     <div className="card p-8 animate-fade-in border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent text-center relative overflow-hidden">
@@ -338,16 +353,34 @@ function PipelineDoneView({ onResults }) {
         <h3 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">
           Análise Concluída! 🎉
         </h3>
-        <p className="text-sm text-[var(--text-secondary)] mb-6 max-w-md mx-auto">
+        <p className="text-sm text-[var(--text-secondary)] mb-2 max-w-md mx-auto">
           Todos os módulos foram executados com sucesso. Seus relatórios, apresentações e artefatos
           estão prontos para visualização.
         </p>
+
+        {/* Download status */}
+        {autoDownloading && (
+          <div className="flex items-center justify-center gap-2 text-xs text-teal-400 mb-4">
+            <Loader2 size={14} className="animate-spin" />
+            Baixando artefatos para seu computador...
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <button onClick={onResults} className="btn-primary px-8">
             <Rocket size={17} />
             Ver Resultados
           </button>
+          {analysisId && (
+            <button
+              onClick={handleManualDownload}
+              disabled={manualDownloading}
+              className="btn-secondary"
+            >
+              {manualDownloading ? <Loader2 size={17} className="animate-spin" /> : <Download size={17} />}
+              {manualDownloading ? 'Baixando...' : 'Baixar ZIP'}
+            </button>
+          )}
           <button onClick={() => window.location.reload()} className="btn-secondary">
             Nova Análise
           </button>
@@ -408,6 +441,8 @@ export default function UploadPage() {
   const [force, setForce] = useState(false);
   const [outputDir, setOutputDir] = useState(() => localStorage.getItem('analisetextos_output_dir') || '');
   const [pipelineId, setPipelineId] = useState(null);
+  const [analysisId, setAnalysisId] = useState(null);
+  const [autoDownloading, setAutoDownloading] = useState(false);
   const [status, setStatus] = useState('idle');
   const logEndRef = useRef(null);
   const [startError, setStartError] = useState(null);
@@ -426,6 +461,22 @@ export default function UploadPage() {
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [progress.logs]);
+
+  // Auto-download ZIP quando pipeline concluir com sucesso
+  useEffect(() => {
+    if (progress.status === 'done' && analysisId && !autoDownloading) {
+      setAutoDownloading(true);
+      toast('📦 Baixando artefatos automaticamente...', 'info');
+      api.downloadAnalysisZip(analysisId, { cleanup: true })
+        .then(() => {
+          toast('✅ Artefatos baixados com sucesso! Arquivos limpos do servidor.', 'success');
+        })
+        .catch((err) => {
+          console.error('Auto-download failed:', err);
+          toast('⚠️ Download automático falhou. Use o botão manual na página de resultados.', 'warning');
+        });
+    }
+  }, [progress.status, analysisId, autoDownloading, toast]);
 
   const handleFileDrop = useCallback(async (e) => {
     const f = e.target.files?.[0];
@@ -467,6 +518,11 @@ export default function UploadPage() {
         output_dir: outputDir || undefined,
       });
       setPipelineId(data.pipeline_id);
+      // Extrair analysis_id do output_dir (ex: ".../peer_review_meu_artigo" → "peer_review_meu_artigo")
+      if (data.output_dir) {
+        const parts = data.output_dir.replace(/\/+$/, '').split('/');
+        setAnalysisId(parts[parts.length - 1]);
+      }
       progress.start();
     } catch (err) {
       setStartError(err.message);
@@ -697,7 +753,7 @@ export default function UploadPage() {
       )}
 
       {progress.status === 'done' && (
-        <PipelineDoneView onResults={() => navigate('/results')} />
+        <PipelineDoneView onResults={() => navigate('/results')} analysisId={analysisId} autoDownloading={autoDownloading} />
       )}
 
       {progress.status === 'error' && (
