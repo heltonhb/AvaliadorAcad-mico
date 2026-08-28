@@ -523,7 +523,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             {[
               { emoji: '📄', label: '7 Relatórios Markdown', desc: 'Estrutura → Metodologia → Auditoria → SOTA → Gaps → Escrita → Parecer' },
-              { emoji: '📊', label: 'Apresentações PPTX', desc: 'Completa (6 slides) + Auditoria (4 slides)' },
+              { emoji: '🎬', label: 'Apresentação Animada & Parecer PDF', desc: 'Slides Interativos HTML (D3.js) + Parecer Oficial Diagramado' },
               { emoji: '🖼️', label: 'Infográfico + Mapa Mental', desc: 'Gerados via NotebookLM artifacts' },
               { emoji: '📋', label: 'CSV de Erros', desc: 'Tabela com página, linha, tipo e gravidade' },
             ].map(({ emoji, label, desc }) => (

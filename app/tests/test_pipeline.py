@@ -82,22 +82,6 @@ class TestCheckpoint:
         assert load_checkpoint(tmp_path) is None
 
 
-class TestPptxFallback:
-    """Test PPTX fallback generation."""
-
-    @pytest.fixture(autouse=True)
-    def setup(self, tmp_path):
-        self.tmpdir = tmp_path  # Path object
-        # Create a required markdown file for the fallback
-        for fname in ["06_sintese_parecer.md", "03_sota_referencias.md"]:
-            (tmp_path / fname).write_text("# Teste\n\nConteúdo", encoding="utf-8")
-
-    def test_completa(self):
-        assert p.generate_pptx_fallback(self.tmpdir, "test", "completa")
-
-    def test_auditoria(self):
-        assert p.generate_pptx_fallback(self.tmpdir, "test", "auditoria")
-
 
 class TestSanitizeFilename:
     def test_path_traversal(self):

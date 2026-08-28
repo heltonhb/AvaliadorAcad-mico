@@ -16,7 +16,7 @@ from pipeline.notebooklm import (
     generate_artifact,
     download_artifact,
 )
-from artifacts import convert_to_csv, generate_pptx_fallback, generate_mira_artifact
+from artifacts import convert_to_csv, generate_mira_artifact
 
 
 def __getattr__(name):

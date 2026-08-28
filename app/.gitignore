@@ -27,6 +27,8 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+storage_state_base64.txt
+cookies.txt
 .venv/
 venv/
 

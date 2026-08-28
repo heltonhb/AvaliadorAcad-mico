@@ -16,7 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from utils import sanitize_filename, find_all_peer_review_dirs, format_file_size, file_icon
-from artifacts import convert_to_csv, generate_pptx_fallback, generate_mira_artifact
+from artifacts import convert_to_csv, generate_mira_artifact
 from security import validate_pdf_upload, sanitize_html, validate_safe_path
 
 
@@ -77,25 +77,6 @@ class TestCsvIntegration:
             assert "Ortográfico" in content or "Gramatical" in content
 
 
-# ===== Testes de Integração: PPTX Fallback =====
-
-class TestPptxIntegration:
-    def test_pptx_completa_with_real_data(self, sample_output_dir):
-        """Testa geração PPTX completa com dados realistas."""
-        result = generate_pptx_fallback(sample_output_dir, "paper_teste", "completa")
-        assert result is True
-
-        pptx_file = sample_output_dir / "apresentacao_completa.pptx"
-        assert pptx_file.exists()
-        assert pptx_file.stat().st_size > 5000  # PPTX real deve ser > 5KB
-
-    def test_pptx_auditoria_with_real_data(self, sample_output_dir):
-        """Testa geração PPTX de auditoria com dados realistas."""
-        result = generate_pptx_fallback(sample_output_dir, "paper_teste", "auditoria")
-        assert result is True
-
-        pptx_file = sample_output_dir / "apresentacao_auditoria.pptx"
-        assert pptx_file.exists()
 
 
 # ===== Testes de Integração: HTML Animado =====
@@ -143,7 +124,6 @@ class TestPipelineFlow:
              patch.object(runner, "run_ask", return_value=True), \
              patch.object(runner, "generate_artifact", return_value=(None, False)), \
              patch.object(runner, "download_artifact", return_value=True), \
-             patch.object(runner, "generate_pptx_fallback", return_value=True), \
              patch.object(runner, "generate_mira_artifact", return_value=True):
 
             # Criar PDF falso

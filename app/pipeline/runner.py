@@ -26,7 +26,7 @@ from pipeline.notebooklm import (
     download_artifact,
 )
 from prompts.loader import PROMPTS, LITE_SKIP_MODULES, get_prompt, get_notebook_persona
-from artifacts import convert_to_csv, generate_pptx_fallback, generate_mira_artifact
+from artifacts import convert_to_csv, generate_mira_artifact
 from pipeline.bibliography import audit_bibliography
 from pipeline.pdf_report import generate_official_pdf_report
 
@@ -495,14 +495,6 @@ def _run_pipeline(pdf_path, domain, mode, force, output_dir, pdf_name, safe_name
             else:
                 log("⚠️ Falha ao baixar apresentação do NotebookLM")
 
-        # Sempre gera apresentação PPTX completa para garantir slides editáveis e completos
-        log("📊 Gerando apresentação completa PPTX...")
-        pptx_completa_ok = generate_pptx_fallback(output_dir, pdf_name, "completa")
-        if pptx_completa_ok:
-            log("✅ Apresentação completa PPTX gerada")
-
-        # Gera apresentação focada de auditoria PPTX
-        generate_pptx_fallback(output_dir, pdf_name, "auditoria")
 
         log("🖼️ Gerando infográfico...")
         desc3 = (
