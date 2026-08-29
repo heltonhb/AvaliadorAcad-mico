@@ -20,6 +20,7 @@ export default function Results() {
   const [obsidianModalOpen, setObsidianModalOpen] = useState(false);
   const [vaultPath, setVaultPath] = useState('~/Documents/Obsidian');
   const [exportingObsidian, setExportingObsidian] = useState(false);
+  const [obsidianExported, setObsidianExported] = useState(null); // { exported_path, vault_path }
 
   useEffect(() => {
     api.analyses()
@@ -143,13 +144,26 @@ export default function Results() {
     setExportingObsidian(true);
     try {
       const result = await api.exportToObsidian(selectedId, vaultPath.trim());
-      toast(`✅ Exportado para Obsidian! ${result.file_count} arquivos em ${result.exported_path}`, 'success');
-      setObsidianModalOpen(false);
+      setObsidianExported({ exported_path: result.exported_path, vault_path: result.vault_path });
+      toast(`✅ Exportado! ${result.file_count} arquivos`, 'success');
     } catch (err) {
       toast(`❌ Erro ao exportar: ${err.message}`, 'error');
     } finally {
       setExportingObsidian(false);
     }
+  };
+
+  const handleOpenInObsidian = () => {
+    if (!obsidianExported) return;
+    // Extrair nome do vault (último diretório do path)
+    const vaultName = vaultPath.trim().split('/').filter(Boolean).pop();
+    // Construir path relativo: AnaliseTextos/ANALYSIS_NAME/00_MOC
+    const exportedPath = obsidianExported.exported_path;
+    const vaultBase = obsidianExported.vault_path;
+    const relativePath = exportedPath.replace(vaultBase, '').replace(/^\//, '');
+    // Abrir via obsidian:// URI scheme
+    const uri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath + '/00_MOC')}`;
+    window.open(uri, '_blank');
   };
 
   return (
@@ -163,7 +177,7 @@ export default function Results() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setObsidianModalOpen(true)}
+            onClick={() => { setObsidianExported(null); setObsidianModalOpen(true); }}
             className="btn-secondary text-xs flex items-center gap-1.5"
             title="Exportar para Obsidian"
           >
@@ -345,42 +359,58 @@ export default function Results() {
               Os arquivos da análise serão copiados para o vault do Obsidian com YAML frontmatter e um índice (MOC).
             </p>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-[var(--text-secondary)]">Caminho do Vault</label>
-              <input
-                type="text"
-                value={vaultPath}
-                onChange={e => setVaultPath(e.target.value)}
-                placeholder="~/Documents/Obsidian"
-                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
-              />
-              <p className="text-xs text-[var(--text-muted)]">
-                O vault deve conter a pasta .obsidian/
-              </p>
-            </div>
+            {obsidianExported ? (
+              <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300">
+                ✅ Arquivos exportados com sucesso em:<br />
+                <code className="text-xs text-emerald-200 break-all">{obsidianExported.exported_path}</code>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--text-secondary)]">Caminho do Vault</label>
+                <input
+                  type="text"
+                  value={vaultPath}
+                  onChange={e => setVaultPath(e.target.value)}
+                  placeholder="~/Documents/Obsidian"
+                  className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                />
+                <p className="text-xs text-[var(--text-muted)]">
+                  O vault deve conter a pasta .obsidian/
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
-                onClick={() => setObsidianModalOpen(false)}
+                onClick={() => { setObsidianModalOpen(false); setObsidianExported(null); }}
                 className="btn-ghost text-sm"
               >
-                Cancelar
+                {obsidianExported ? 'Fechar' : 'Cancelar'}
               </button>
-              <button
-                onClick={handleExportObsidian}
-                disabled={exportingObsidian || !vaultPath.trim()}
-                className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {exportingObsidian ? (
-                  <>
-                    <span className="animate-spin">⏳</span> Exportando...
-                  </>
-                ) : (
-                  <>
-                    <BookMarked size={14} /> Exportar
-                  </>
-                )}
-              </button>
+              {obsidianExported ? (
+                <button
+                  onClick={handleOpenInObsidian}
+                  className="btn-primary text-sm flex items-center gap-1.5"
+                >
+                  <BookMarked size={14} /> Abrir no Obsidian
+                </button>
+              ) : (
+                <button
+                  onClick={handleExportObsidian}
+                  disabled={exportingObsidian || !vaultPath.trim()}
+                  className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {exportingObsidian ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Exportando...
+                    </>
+                  ) : (
+                    <>
+                      <BookMarked size={14} /> Exportar
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
