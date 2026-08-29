@@ -1,5 +1,19 @@
 {
-  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders.",
+  "permissions": {
+    "allow": [
+      "Bash(rtk ls *)",
+      "Bash(rtk git *)",
+      "Bash(rtk grep *)",
+      "Bash(sqlite3 *)",
+      "Bash(python3 *)",
+      "Bash(./start.sh dev *)",
+      "Bash(rtk curl *)",
+      "Bash(pkill *)",
+      "Bash(rtk read *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -14,5 +28,6 @@
         ]
       }
     ]
-  }
+  },
+  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders."
 }

@@ -29,6 +29,9 @@ frontend/dist/
 !.env.example
 storage_state_base64.txt
 cookies.txt
+*.cookies.txt
+notebooklm_profiles/
+.notebooklm/
 .venv/
 venv/
 

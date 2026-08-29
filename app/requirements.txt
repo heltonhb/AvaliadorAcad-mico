@@ -21,3 +21,6 @@ opentelemetry-instrumentation-fastapi>=0.42b0
 opentelemetry-instrumentation-httpx>=0.42b0
 opentelemetry-instrumentation-redis>=0.42b0
 opentelemetry-exporter-otlp>=1.21.0
+huggingface_hub>=0.26.0
+transformers>=4.40.0
+sentence-transformers>=3.0.0

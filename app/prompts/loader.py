@@ -39,40 +39,46 @@ def _read_domain_file(domain: str) -> str:
 
 
 def _get_fallback_prompt(module: str) -> str:
-    """Fallback prompts if files don't exist."""
+    """Fallback mínimo usado APENAS se o arquivo .md do módulo estiver ausente.
+    Emite um aviso — o fallback não contém instruções de estrutura, domínio nem
+    anti-alucinação. O arquivo deve ser restaurado o quanto antes.
+    """
+    import warnings
+    warnings.warn(
+        f"Arquivo de prompt para módulo '{module}' não encontrado em {PROMPTS_DIR}. "
+        "Usando fallback mínimo — a qualidade da análise será degradada. "
+        "Restaure os arquivos do diretório prompts/v6/.",
+        RuntimeWarning,
+        stacklevel=3,
+    )
     fallbacks = {
-        "00": "Analise a estrutura do documento.",
-        "01": "Realize auditoria metodologica.",
-        "02": "Realize checklist editorial.",
-        "03": "Analise referencial teorico.",
-        "04": "Identifique gaps logicos.",
-        "05": "Analise qualidade da escrita.",
-        "06": "Produza parecer final.",
-        "07": "Realize auditoria quantitativa.",
+        "00": "Analise a estrutura do documento e produza um relatório Markdown detalhado.",
+        "01": "Realize auditoria metodológica rigorosa e produza um relatório Markdown detalhado.",
+        "02": "Realize checklist editorial completo e produza um relatório Markdown detalhado.",
+        "03": "Analise o referencial teórico e produza um relatório Markdown detalhado.",
+        "04": "Identifique gaps lógicos e produza um relatório Markdown detalhado.",
+        "05": "Analise a qualidade da escrita e produza um relatório Markdown detalhado.",
+        "06": "Produza o parecer final com nota de 0-10, decisão editorial e bloco JSON de metadados.",
+        "07": "Realize auditoria quantitativa e produza um relatório Markdown detalhado.",
     }
-    return fallbacks.get(module, "")
+    return fallbacks.get(module, f"Analise o documento para o módulo {module} e produza relatório Markdown.")
 
 
 @lru_cache(maxsize=1)
 def get_system_persona() -> str:
-    """Load system persona from file or use default."""
-    persona_file = PROMPTS_DIR / "system_persona.md"
-    if persona_file.exists():
-        return persona_file.read_text(encoding="utf-8")
-    return """Você é um Revisor Acadêmico Sênior — Parecerista com mais de 15 anos de experiência em
-avaliação para periódicos Qualis A1 / Q1 (JCR/Scopus). Possui expertise em metodologia de
-pesquisa, análise estatística e ética em publicação científica.
+    """Carrega a persona do arquivo system_persona.md.
 
-DIRETRIZES DE CONDUTA:
-1. Tom: Rigoroso, mas construtivo. Aponte falhas com justificativa e sugira correções.
-2. Ancoragem factual: Baseie-se EXCLUSIVAMENTE no documento fornecido. Se uma informação
-   não existir no texto, declare 'NÃO ENCONTRADO NO DOCUMENTO'.
-3. Calibração de certeza: Diferencie afirmações definitivas de observações prováveis.
-   Use 'O documento não apresenta...' ao invés de 'Não há...'.
-4. Evidência textual: Para cada crítica, cite o trecho ou seção específica do documento.
-5. Priorização: Classifique problemas por impacto na validade científica do trabalho.
-6. Idioma: Detecte o idioma predominante do documento e produza a análise nesse idioma.
-7. Consistência Modular: Cada módulo alimenta o seguinte. Seja consistente em suas avaliações entre módulos."""
+    O arquivo é OBRIGATÓRIO. Se estiver ausente, a aplicação falha no startup
+    em vez de usar silenciosamente uma persona inferior (que não contém as
+    diretrizes de idioma, citação exata e anti-alucinação).
+    """
+    persona_file = PROMPTS_DIR / "system_persona.md"
+    if not persona_file.exists():
+        raise FileNotFoundError(
+            f"Arquivo de persona obrigatório não encontrado: {persona_file}\n"
+            "Verifique se o diretório prompts/v6/ está completo."
+        )
+    return persona_file.read_text(encoding="utf-8")
 
 
 def get_prompt(module: str, domain: str = "cs") -> str:

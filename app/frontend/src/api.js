@@ -52,6 +52,23 @@ export const api = {
     return request('/upload', { method: 'POST', body: form });
   },
 
+  // Reutiliza um upload já existente no servidor pelo path salvo.
+  // Não faz re-upload: apenas valida que o arquivo ainda existe e retorna
+  // os metadados necessários para iniciar o pipeline.
+  uploadFromPath: async (serverPath) => {
+    // O path já está no servidor — monta um objeto compatível com o retorno
+    // de /api/upload para que o componente possa iniciar o pipeline normalmente.
+    const name = serverPath.split('/').pop();
+    return {
+      filename: name,
+      safe_name: name,
+      path: serverPath,
+      size_mb: null,
+      was_compressed: false,
+      original_size_mb: null,
+    };
+  },
+
   // Pipeline
   startPipeline: ({ file_path, domain = 'cs', mode = 'full', force = false, output_dir }) =>
     request('/pipeline/start', {

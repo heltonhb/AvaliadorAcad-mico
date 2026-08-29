@@ -467,9 +467,9 @@ export default function UploadPage() {
     if (progress.status === 'done' && analysisId && !autoDownloading) {
       setAutoDownloading(true);
       toast('📦 Baixando artefatos automaticamente...', 'info');
-      api.downloadAnalysisZip(analysisId, { cleanup: true })
+      api.downloadAnalysisZip(analysisId)
         .then(() => {
-          toast('✅ Artefatos baixados com sucesso! Arquivos limpos do servidor.', 'success');
+          toast('✅ Artefatos baixados com sucesso!', 'success');
         })
         .catch((err) => {
           console.error('Auto-download failed:', err);
@@ -753,7 +753,11 @@ export default function UploadPage() {
       )}
 
       {progress.status === 'done' && (
-        <PipelineDoneView onResults={() => navigate('/results')} analysisId={analysisId} autoDownloading={autoDownloading} />
+        <PipelineDoneView
+          onResults={() => navigate(analysisId ? `/results?analysis=${encodeURIComponent(analysisId)}` : '/results')}
+          analysisId={analysisId}
+          autoDownloading={autoDownloading}
+        />
       )}
 
       {progress.status === 'error' && (

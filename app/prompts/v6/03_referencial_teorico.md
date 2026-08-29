@@ -4,9 +4,14 @@ title: "Referencial Teórico"
 description: "Analise criticamente o referencial teórico, a qualidade da revisão de literatura e a integridade bibliográfica"
 ---
 
-Analise criticamente o referencial teórico, a qualidade da revisão de literatura \
+> ⚠️ ANTI-ALUCINAÇÃO: Baseie-se exclusivamente nas referências e afirmações presentes
+> no documento. Não julgue a ausência de autores específicos que você "esperaria" ver —
+> apenas sinalize ausências de categorias de fontes (ex: "nenhuma fonte dos últimos 5 anos")
+> que sejam verificáveis pelo próprio documento. Cite trechos ao avaliar síntese vs. listagem.
+
+Analise criticamente o referencial teórico, a qualidade da revisão de literatura
 e a integridade bibliográfica.
-Use EXATAMENTE a seguinte estrutura de saída:
+Use EXATAMENTE a seguinte estrutura de saída (cabeçalhos em português):
 
 # Referencial Teórico
 ## Fundamentação Teórica

@@ -135,6 +135,9 @@ export function usePipelineProgress() {
         const baseUrl = window.location.origin;
         eventSource = new EventSource(`${baseUrl}/api/pipeline/progress/stream`);
 
+        // 'ping' é um heartbeat do servidor para manter conexão viva em proxies.
+        eventSource.addEventListener('ping', () => { /* heartbeat — ignorar */ });
+
         eventSource.addEventListener('progress', (ev) => {
           if (stopped) return;
           try { handleProgress(JSON.parse(ev.data)); } catch { /* ignore */ }
@@ -150,6 +153,12 @@ export function usePipelineProgress() {
           try { handleProgress(JSON.parse(ev.data)); } catch { /* ignore */ }
           eventSource?.close();
           eventSource = null;
+        });
+
+        // Evento 'error' com dados = erro explícito do servidor.
+        eventSource.addEventListener('error', (ev) => {
+          if (stopped || !ev.data) return;
+          try { console.error('SSE server error:', JSON.parse(ev.data)); } catch { /* ignore */ }
         });
 
         eventSource.onerror = () => {

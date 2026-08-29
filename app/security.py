@@ -4,8 +4,6 @@ Módulo de segurança — sanitização HTML, autenticação, validação de upl
 
 import os
 import re
-import secrets
-import hashlib
 
 # ===== HTML Sanitization =====
 import bleach
@@ -39,37 +37,29 @@ def sanitize_html(raw_html: str) -> str:
 
 
 # ===== Password Hashing =====
+# bcrypt é uma dependência obrigatória. Se não estiver instalado, a aplicação
+# falha no startup — senhas nunca são protegidas por um algoritmo inseguro.
 try:
     import bcrypt
+except ImportError as _bcrypt_err:
+    raise ImportError(
+        "bcrypt não está instalado. Execute: pip install bcrypt>=4.0\n"
+        "bcrypt é obrigatório para proteção de senhas — não há fallback."
+    ) from _bcrypt_err
 
-    def hash_password(password: str) -> str:
-        """Gera hash bcrypt da senha."""
-        salt = bcrypt.gensalt(rounds=12)
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
-    def verify_password(password: str, hashed: str) -> bool:
-        """Verifica senha contra hash bcrypt."""
-        try:
-            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
-        except Exception:
-            return False
+def hash_password(password: str) -> str:
+    """Gera hash bcrypt da senha (cost factor 12)."""
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
-except ImportError:
-    import warnings
-    warnings.warn(
-        "bcrypt não instalado — autenticação usa fallback SHA-256 (MENOS SEGURO). "
-        "Instale bcrypt: pip install bcrypt>=4.0",
-        RuntimeWarning,
-        stacklevel=2,
-    )
 
-    def hash_password(password: str) -> str:
-        """Fallback: SHA-256 (NÃO recomendado para produção)."""
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-    def verify_password(password: str, hashed: str) -> bool:
-        """Fallback: comparação direta com hash SHA-256."""
-        return secrets.compare_digest(hash_password(password), hashed)
+def verify_password(password: str, hashed: str) -> bool:
+    """Verifica senha contra hash bcrypt. Retorna False em qualquer erro."""
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
 
 
 

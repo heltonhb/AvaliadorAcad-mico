@@ -4,30 +4,39 @@ title: "Estrutura do Documento"
 description: "Mapeie e avalie a estrutura do documento"
 ---
 
+> ⚠️ ANTI-ALUCINAÇÃO: Antes de listar qualquer achado, verifique se ele está
+> documentado no texto. Em caso de dúvida, declare 'NÃO ENCONTRADO NO DOCUMENTO'.
+> Seção obrigatória totalmente ausente = achado de GRAVIDADE CRÍTICA, não lacuna analítica.
+
 Mapeie e avalie a estrutura do documento. Identifique primeiro o idioma e o tipo de documento.
-Use EXATAMENTE a seguinte estrutura de saída em Markdown:
+
+**Diretrizes de domínio aplicáveis a este módulo:**
+{{DOMAIN_PROMPT}}
+
+Use EXATAMENTE a seguinte estrutura de saída em Markdown (cabeçalhos em português):
 
 # Estrutura do Documento
 ## Pre-flight e Qualificação
-- **Idioma Predominante:** [Português / Inglês / Espanhol / etc.]
-- **Tipo de Documento Detectado:** [Artigo completo / Short paper / Capítulo de tese / Preprint / Relatório técnico / Outro]
-- **Qualidade do PDF:** [Texto legível / Escaneado com OCR ruim / Problemas de formatação?]
+- **Idioma Predominante:** [Português / Inglês / Espanhol / outro — identifique]
+- **Tipo de Documento Detectado:** [Artigo completo / Short paper / Tese / Dissertação / TCC / Preprint / Relatório técnico / Proposta de qualificação / Outro]
+- **Qualidade do PDF:** [Texto vetorial legível / Escaneado com OCR / Problemas de formatação detectados]
 
 ## Conformidade Estrutural
-- **Padrão Identificado:** [IMRAD / Específico do tipo detectado]
-- **Seções Presentes:** [Liste todas]
-- **Seções Ausentes (obrigatórias para o tipo):** [Adicione um mini-checklist de seções obrigatórias para o tipo detectado]
-- **Coerência Introdução→Conclusão:** [O objetivo declarado na Introdução é respondido na Conclusão?]
+- **Padrão Estrutural Esperado:** [IMRAD para artigos empíricos / Específico para o tipo detectado — ex: CONSORT flow para RCT, PRISMA para revisão sistemática]
+- **Seções Presentes:** [Liste todas as seções encontradas]
+- **Seções Obrigatórias Ausentes:** [Liste o que falta para o tipo detectado — se nenhuma, escreva "Nenhuma seção obrigatória ausente"]
+- **🔴 Ausências Críticas:** [Seções cuja ausência inviabiliza a avaliação — ex: Metodologia ausente num artigo empírico]
+- **Coerência Introdução→Conclusão:** ["O objetivo declarado em [citar trecho da Introdução] é [respondido / parcialmente respondido / não respondido] na Conclusão [citar trecho]"]
 
 ## Mapeamento Detalhado
-### [Nome da Seção 1]
-- **Objetivo:** [Descreva em até 2 linhas]
-- **Palavras-chave:** [3 a 5 palavras-chave]
-- **Proporção estimada:** [Adequada / Subdimensionada / Superdimensionada (ex: introdução > 30% numa seção IMRAD é desproporcional)]
+Para CADA seção principal encontrada, preencha:
 
-### [Nome da Seção 2]
-... (continue para todas as seções principais)
+### [Nome exato da seção]
+- **Objetivo cumprido:** [O que a seção se propõe a fazer e se cumpre]
+- **Proporção estimada:** [Adequada / Subdimensionada / Superdimensionada — justifique: ex: "Introdução ocupa ~35% do texto, desproporcional para IMRAD"]
+- **Achados notáveis:** [Qualquer elemento que precise de análise mais profunda nos módulos seguintes]
 
 ## Fluxo Narrativo
-- **Coesão entre seções:** [O texto flui logicamente? Há saltos ou redundâncias?]
-- **Alinhamento Objetivo–Método–Resultado–Conclusão:** [Avalie]
+- **Coesão entre seções:** [O texto flui logicamente? Cite trechos de transições abruptas ou redundâncias encontradas]
+- **Alinhamento Objetivo–Método–Resultado–Conclusão:** [Avalie cada par com citação textual de suporte]
+- **Inconsistências detectadas neste módulo:** [Liste inconsistências estruturais que os módulos posteriores devem investigar]

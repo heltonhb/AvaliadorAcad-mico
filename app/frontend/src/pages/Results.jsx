@@ -13,21 +13,34 @@ export default function Results() {
   const [selectedId, setSelectedId] = useState(initialAnalysis || null);
   const [analysisDetail, setAnalysisDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('reports');
 
   useEffect(() => {
-    api.analyses().then(data => {
-      setAnalyses(data);
-      if (data.length > 0 && !selectedId) {
-        setSelectedId(data[0].id);
-      }
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    api.analyses()
+      .then(data => {
+        setAnalyses(data);
+        if (data.length > 0 && !selectedId) {
+          setSelectedId(data[0].id);
+        }
+        setLoading(false);
+        setError(null); // Limpa qualquer erro anterior
+      })
+      .catch(error => {
+        console.error('Erro ao carregar análises:', error);
+        setLoading(false);
+        setError('Erro ao carregar os resultados. Verifique sua conexão e tente novamente.');
+      });
   }, []);
 
   useEffect(() => {
     if (selectedId) {
-      api.analysis(selectedId).then(setAnalysisDetail).catch(() => {});
+      api.analysis(selectedId)
+        .then(setAnalysisDetail)
+        .catch(error => {
+          console.error('Erro ao carregar detalhes da análise:', error);
+          setError('Erro ao carregar os detalhes da análise. Verifique sua conexão e tente novamente.');
+        });
     }
   }, [selectedId]);
 
@@ -43,9 +56,17 @@ export default function Results() {
   useEffect(() => {
     if (scoreFile && selectedId) {
       fetch(`/api/analyses/${selectedId}/files/${scoreFile.name}`)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
         .then(setScoreData)
-        .catch(() => {});
+        .catch(error => {
+          console.error('Erro ao carregar score.json:', error);
+          setError('Erro ao carregar os detalhes da análise. Verifique sua conexão e tente novamente.');
+        });
     }
   }, [scoreFile, selectedId]);
 
@@ -55,6 +76,32 @@ export default function Results() {
         <div className="skeleton skeleton-shimmer h-7 w-48" />
         <div className="skeleton skeleton-shimmer h-11 w-full" />
         <div className="skeleton skeleton-shimmer h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="animate-fade-in text-center py-16 sm:py-24">
+        <div aria-hidden="true" className="w-18 h-18 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-red-400/80 flex items-center justify-center shadow-lg shadow-[rgba(220,38,38,0.15)]">
+          <AlertCircle size={32} className="text-[var(--bg-primary)]" />
+        </div>
+
+        <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] mb-2">
+          Ocorreu um erro
+        </h2>
+        <p className="text-[var(--text-tertiary)] text-sm max-w-md mx-auto mb-8 leading-relaxed">
+          {error}
+        </p>
+
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={() => window.location.reload()} className="btn-outline">
+            Tentar Novamente
+          </button>
+          <button onClick={() => navigate('/')} className="btn-secondary">
+            Ir para Dashboard
+          </button>
+        </div>
       </div>
     );
   }

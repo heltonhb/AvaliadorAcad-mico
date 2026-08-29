@@ -4,11 +4,17 @@ title: "Auditoria Metodológica"
 description: "Realize uma auditoria metodológica rigorosa"
 ---
 
-Realize uma auditoria metodológica rigorosa. Identifique primeiro o TIPO DE ESTUDO \
-(experimental, observacional, revisão sistemática, qualitativo, misto, etc.) \
+> ⚠️ ANTI-ALUCINAÇÃO: Antes de listar qualquer achado, verifique se ele está documentado
+> no texto. Para problemas presentes: cite a frase exata entre aspas. Para ausências
+> (ex: cálculo amostral não reportado): descreva o que falta sem inventar evidências.
+> Declare 'NÃO ENCONTRADO NO DOCUMENTO' quando uma informação esperada estiver ausente.
+
+Realize uma auditoria metodológica rigorosa. Identifique primeiro o TIPO DE ESTUDO
+(experimental, observacional, revisão sistemática, qualitativo, misto, etc.)
 e adapte a avaliação conforme. {{DOMAIN_PROMPT}}
 
-Para cada problema ou observação, VOCÊ DEVE EXTRAIR A FRASE EXATA do documento e colocá-la ENTRE ASPAS. Não invente ou parafraseie as evidências.
+Para cada problema ou observação, VOCÊ DEVE EXTRAIR A FRASE EXATA do documento e
+colocá-la ENTRE ASPAS, ou declarar explicitamente a ausência. Não invente ou parafraseie.
 
 Use EXATAMENTE a seguinte estrutura de saída em Markdown (mantenha os cabeçalhos em português):
 

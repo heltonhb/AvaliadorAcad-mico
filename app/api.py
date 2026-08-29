@@ -1,23 +1,31 @@
 """
 AnaliseTextos API v6.0 — FastAPI REST API para Auditoria Científica e Peer-Review.
 """
+# ===== stdlib =====
 import asyncio
+import base64
 import csv
 import json
+import logging
 import os
 import re
 import shutil
 import sys
 import time
 import uuid
+import zipfile
+import io
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
+# ===== third-party =====
+import dotenv
 import httpx
 import structlog
 import uvicorn
 from fastapi import FastAPI, Request, Response, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -25,51 +33,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 
-import dotenv
-import uuid
-from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
-
-import httpx
-import structlog
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from starlette.middleware.base import BaseHTTPMiddleware
-
-import dotenv
-
 dotenv.load_dotenv()
 
-# Setup telemetry (will be initialized after app creation)
+# ===== Telemetry (importado antes do structlog.configure) =====
 from telemetry import setup_telemetry, get_tracer
 
-# Configurar structlog ANTES de importar módulos que fazem logging
-log_format = os.environ.get("LOG_FORMAT", "text").lower()
-log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from starlette.middleware.base import BaseHTTPMiddleware
-
-import dotenv
-import structlog
-from fastapi import FastAPI, Request, Response, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from starlette.middleware.base import BaseHTTPMiddleware
-
-import dotenv
-
-
-# Configurar structlog ANTES de importar módulos que fazem logging
+# ===== Logging =====
 log_format = os.environ.get("LOG_FORMAT", "text").lower()
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -89,7 +58,6 @@ structlog.configure(
 )
 
 # Configurar stdlib logging para capturar logs de bibliotecas
-import logging
 logging.basicConfig(
     level=getattr(logging, log_level, logging.INFO),
     format="%(message)s",
@@ -107,6 +75,7 @@ from auth import (
     create_token,
     verify_token,
     get_user_by_id,
+    get_db,
     check_notebooklm_auth,
     get_effective_notebooklm_profile,
     get_notebooklm_profile_path,
@@ -400,7 +369,6 @@ async def health_ready():
 
     # DB check
     try:
-        from auth import get_db
         with get_db() as conn:
             conn.execute("SELECT 1").fetchone()
         checks["database"] = "ok"
@@ -423,7 +391,17 @@ async def health_ready():
     except Exception as e:
         checks["crossref"] = f"error: {e}"
 
-    all_ok = all(v == "ok" for v in checks.values())
+    # Hugging Face Hub check (via hf_integration)
+    try:
+        from hf_integration import check_hf_setup
+        hf = check_hf_setup()
+        checks["huggingface"] = hf.get("status", "error")
+        if hf.get("user"):
+            checks["huggingface"] = f"ok ({hf['user']})"
+    except Exception as e:
+        checks["huggingface"] = f"error: {e}"
+
+    all_ok = all(v == "ok" or v.startswith("ok") for v in checks.values())
     status_code = 200 if all_ok else 503
 
     return JSONResponse(
@@ -567,8 +545,6 @@ async def pipeline_start(request: Request, body: PipelineStartBody):
     job_id = f"job_{uuid.uuid4().hex[:12]}"
 
     # Create job record in DB
-    from auth import get_db
-    from datetime import datetime, timezone
     with get_db() as conn:
         conn.execute(
             """
@@ -581,34 +557,35 @@ async def pipeline_start(request: Request, body: PipelineStartBody):
     # Enqueue Celery task
     from pipeline.tasks.pipeline_tasks import run_pipeline_task
     from celery_app import EAGER_MODE
-    task_id = job_id  # apply_async usa task_id=job_id
-    if EAGER_MODE:
-        # Sem worker: roda inline numa thread de fundo para a resposta do
-        # POST retornar já com o job_id e o polling/stream acompanhar.
-        import threading
+    task_id = job_id
 
-        def _run_eager():
+    task_args = [job_id, pdf_path, body.domain, body.mode, body.force, output_dir, user["id"], profile]
+
+    if EAGER_MODE:
+        # Em modo eager (dev sem worker), task_always_eager executa a task
+        # inline e de forma bloqueante. Delegamos para um thread pool gerenciado
+        # pelo asyncio para não bloquear o event loop do servidor.
+        def _run_eager_sync():
             try:
-                run_pipeline_task.apply_async(
-                    args=[job_id, pdf_path, body.domain, body.mode, body.force, output_dir, user["id"], profile],
-                    task_id=job_id,
-                )
+                run_pipeline_task.apply_async(args=task_args, task_id=job_id)
             except Exception:
                 logger.exception("pipeline_eager_failed", job_id=job_id)
-                from auth import get_db as _get_db
-                from datetime import datetime, timezone as _tz
-                with _get_db() as conn:
+                with get_db() as conn:
                     conn.execute(
-                        "UPDATE pipeline_jobs SET status='failed', error='Falha ao iniciar pipeline (eager)', updated_at=?, completed_at=? WHERE id=?",
-                        (_tz.datetime.now(_tz.utc).isoformat(), _tz.datetime.now(_tz.utc).isoformat(), job_id),
+                        "UPDATE pipeline_jobs SET status='failed', "
+                        "error='Falha ao iniciar pipeline (eager mode)', "
+                        "updated_at=?, completed_at=? WHERE id=?",
+                        (
+                            datetime.now(timezone.utc).isoformat(),
+                            datetime.now(timezone.utc).isoformat(),
+                            job_id,
+                        ),
                     )
 
-        threading.Thread(target=_run_eager, name=f"pipeline-{job_id}", daemon=True).start()
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _run_eager_sync)
     else:
-        task = run_pipeline_task.apply_async(
-            args=[job_id, pdf_path, body.domain, body.mode, body.force, output_dir, user["id"], profile],
-            task_id=job_id,
-        )
+        task = run_pipeline_task.apply_async(args=task_args, task_id=job_id)
         task_id = task.id
 
     # Update task ID in DB
@@ -639,7 +616,6 @@ async def pipeline_status(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    from auth import get_db
     with get_db() as conn:
         row = conn.execute(
             "SELECT id, status, output_dir, created_at, updated_at, completed_at "
@@ -668,7 +644,6 @@ async def pipeline_progress(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Não autenticado")
 
-    from auth import get_db
     with get_db() as conn:
         row = conn.execute(
             "SELECT id, status, progress, output_dir, error "
@@ -788,29 +763,54 @@ def _get_pipeline_logs(output_dir: Path) -> list[str]:
 
 @app.get("/api/pipeline/progress/stream")
 async def pipeline_progress_stream(request: Request):
-    """Server-Sent Events para progresso do pipeline."""
+    """Server-Sent Events para progresso do pipeline.
+
+    Envia evento 'progress' a cada 3s enquanto o pipeline estiver rodando.
+    Envia um 'ping' a cada ciclo para manter a conexão viva em proxies.
+    Encerra automaticamente ao detectar desconexão do cliente ou conclusão do job.
+    """
     user = _get_user(request)
 
     async def event_generator():
-        from auth import get_db
+        consecutive_errors = 0
         while True:
-            with get_db() as conn:
-                row = conn.execute(
-                    "SELECT id, status, output_dir FROM pipeline_jobs "
-                    "WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
-                    (user["id"],),
-                ).fetchone()
+            # Detectar desconexão do cliente antes de processar
+            if await request.is_disconnected():
+                logger.info("sse_client_disconnected", user_id=user["id"])
+                break
+
+            try:
+                with get_db() as conn:
+                    row = conn.execute(
+                        "SELECT id, status, output_dir FROM pipeline_jobs "
+                        "WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                        (user["id"],),
+                    ).fetchone()
+                consecutive_errors = 0
+            except Exception as e:
+                consecutive_errors += 1
+                logger.warning("sse_db_error", error=str(e), consecutive=consecutive_errors)
+                if consecutive_errors >= 3:
+                    yield f"event: error\ndata: {json.dumps({'detail': 'Erro interno'})}\n\n"
+                    break
+                await asyncio.sleep(3)
+                continue
 
             job_status = row["status"] if row else "idle"
             output_dir = row["output_dir"] if row else None
+
             if output_dir:
                 progress = _read_pipeline_progress(Path(output_dir), user["id"])
             else:
-                progress = {"running": False, "status": job_status, "current_step": None,
-                            "completed_modules": [], "logs": []}
+                progress = {
+                    "running": False, "status": job_status,
+                    "current_step": None, "completed_modules": [], "logs": [],
+                }
             progress["status"] = job_status
             progress["running"] = job_status in ("pending", "queued", "running")
 
+            # Heartbeat para manter proxies/load balancers acordados
+            yield f"event: ping\ndata: {{}}\n\n"
             yield f"event: progress\ndata: {json.dumps(progress, ensure_ascii=False)}\n\n"
 
             if not progress["running"]:
@@ -819,7 +819,14 @@ async def pipeline_progress_stream(request: Request):
 
             await asyncio.sleep(3)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # desativa buffering no Nginx
+        },
+    )
 
 
 # =====================================================================
@@ -835,31 +842,36 @@ async def list_analyses(request: Request):
 
 
 def _get_analysis_dir(analysis_id: str, user_id: int) -> Path | None:
-    """Encontra o diretório da análise pelo ID, procurando no user_dir e no BASE_DIR."""
+    """Encontra o diretório da análise pelo ID, buscando APENAS no diretório do usuário.
+
+    A busca é estritamente limitada ao diretório do usuário para evitar que um
+    usuário acesse dados de outro (IDOR). O fallback global foi removido.
+    """
+    # Sanitizar analysis_id para prevenir path traversal
+    if not analysis_id or "/" in analysis_id or "\\" in analysis_id or ".." in analysis_id:
+        return None
     user_dir = _user_analyses_dir(user_id) / analysis_id
     if user_dir.exists() and user_dir.is_dir():
         return user_dir
-
-    # Busca em todo o BASE_DIR
-    for p in find_all_peer_review_dirs(BASE_DIR):
-        if p.name == analysis_id:
-            return p
     return None
 
 
 def _list_analyses(user_dir: Path) -> list[dict]:
-    """Varre diretórios peer_review_* e retorna metadados."""
+    """Varre diretórios peer_review_* do usuário e retorna metadados.
+
+    Busca exclusivamente dentro de user_dir para evitar vazamento cross-user.
+    """
     dirs = []
     seen = set()
 
-    candidate_dirs = []
-    if user_dir.exists():
-        candidate_dirs.extend([d for d in user_dir.iterdir() if d.is_dir() and d.name.startswith("peer_review_")])
-    for p in find_all_peer_review_dirs(BASE_DIR):
-        if p not in candidate_dirs:
-            candidate_dirs.append(p)
+    if not user_dir.exists():
+        return dirs
 
-    candidate_dirs = sorted(candidate_dirs, key=lambda x: x.stat().st_mtime, reverse=True)
+    candidate_dirs = sorted(
+        [d for d in user_dir.iterdir() if d.is_dir() and d.name.startswith("peer_review_")],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True,
+    )
 
     for d in candidate_dirs:
         if d.name in seen:
@@ -1065,11 +1077,16 @@ async def get_analysis_file(analysis_id: str, filename: str, request: Request):
     if not analysis_dir or not analysis_dir.exists():
         raise HTTPException(status_code=404, detail="Análise não encontrada")
 
+    # Sanitização preemptiva: rejeitar qualquer tentativa de path traversal
+    # antes mesmo de construir o caminho no disco.
+    if not filename or "/" in filename or "\\" in filename or ".." in filename or "\x00" in filename:
+        raise HTTPException(status_code=400, detail="Nome de arquivo inválido")
+
     file_path = analysis_dir / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
-    # Validação anti path-traversal
+    # Segunda linha de defesa: confirmar que o path resolvido está dentro do diretório
     try:
         file_path.resolve().relative_to(analysis_dir.resolve())
     except ValueError:
@@ -1138,9 +1155,6 @@ async def delete_analysis(analysis_id: str, request: Request):
 async def download_analysis_zip(analysis_id: str, request: Request, cleanup: bool = False):
     """Empacota todos os artefatos da análise em um ZIP e retorna para download.
     Se cleanup=true, remove os arquivos do servidor após gerar o ZIP."""
-    import zipfile
-    import io
-
     user = _get_user(request)
     analysis_dir = _get_analysis_dir(analysis_id, user["id"])
     if not analysis_dir or not analysis_dir.exists():
@@ -1394,9 +1408,7 @@ if _frontend_dist.exists():
         raise HTTPException(status_code=404, detail="Frontend não construído")
 
 
-import base64
-from auth import get_notebooklm_profile_path
-
+# Restaurar storage_state.json a partir de variável de ambiente (deploy sem volume)
 env_b64 = os.environ.get("NOTEBOOKLM_STORAGE_STATE_BASE64")
 if env_b64:
     try:
@@ -1405,7 +1417,7 @@ if env_b64:
         storage_file = profile_path / "storage_state.json"
         decoded = base64.b64decode(env_b64).decode("utf-8")
         storage_file.write_text(decoded, encoding="utf-8")
-        logger.info("Restaurado storage_state.json a partir da variável de ambiente NOTEBOOKLM_STORAGE_STATE_BASE64")
+        logger.info("Restaurado storage_state.json a partir da variável NOTEBOOKLM_STORAGE_STATE_BASE64")
     except Exception as e:
         logger.error(f"Falha ao restaurar storage_state.json: {e}")
 
