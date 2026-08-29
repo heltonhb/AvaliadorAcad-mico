@@ -129,4 +129,11 @@ export const api = {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   },
+
+  // Export analysis to Obsidian vault
+  exportToObsidian: (analysisId, vaultPath) =>
+    request(`/analyses/${encodeURIComponent(analysisId)}/export/obsidian`, {
+      method: 'POST',
+      body: JSON.stringify({ vault_path: vaultPath }),
+    }),
 };

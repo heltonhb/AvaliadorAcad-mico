@@ -1,12 +1,14 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BarChart3, FileText, Download, AlertCircle, Play, Eye, Maximize2, Search, Filter, Sparkles, CheckCircle2, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { BarChart3, FileText, Download, AlertCircle, Play, Eye, Maximize2, Search, Filter, Sparkles, CheckCircle2, TrendingUp, TrendingDown, ArrowRight, BookMarked } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '../api';
+import { useToast } from '../components/Toast';
 
 export default function Results() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
   const initialAnalysis = searchParams.get('analysis');
   const [analyses, setAnalyses] = useState([]);
@@ -15,6 +17,9 @@ export default function Results() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('reports');
+  const [obsidianModalOpen, setObsidianModalOpen] = useState(false);
+  const [vaultPath, setVaultPath] = useState('~/Documents/Obsidian');
+  const [exportingObsidian, setExportingObsidian] = useState(false);
 
   useEffect(() => {
     api.analyses()
@@ -133,6 +138,20 @@ export default function Results() {
     );
   }
 
+  const handleExportObsidian = async () => {
+    if (!selectedId || !vaultPath.trim()) return;
+    setExportingObsidian(true);
+    try {
+      const result = await api.exportToObsidian(selectedId, vaultPath.trim());
+      toast(`✅ Exportado para Obsidian! ${result.file_count} arquivos em ${result.exported_path}`, 'success');
+      setObsidianModalOpen(false);
+    } catch (err) {
+      toast(`❌ Erro ao exportar: ${err.message}`, 'error');
+    } finally {
+      setExportingObsidian(false);
+    }
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -142,12 +161,21 @@ export default function Results() {
           </h2>
           <p className="text-sm text-[var(--text-tertiary)]">Visualize relatórios técnicos, apresentações e auditorias</p>
         </div>
-        <button
-          onClick={() => navigate(`/compare?target=${encodeURIComponent(selectedId || '')}`)}
-          className="btn-secondary text-xs flex items-center gap-1.5"
-        >
-          <span>🔄</span> Comparar com outra versão
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setObsidianModalOpen(true)}
+            className="btn-secondary text-xs flex items-center gap-1.5"
+            title="Exportar para Obsidian"
+          >
+            <BookMarked size={14} /> Exportar p/ Obsidian
+          </button>
+          <button
+            onClick={() => navigate(`/compare?target=${encodeURIComponent(selectedId || '')}`)}
+            className="btn-secondary text-xs flex items-center gap-1.5"
+          >
+            <span>🔄</span> Comparar com outra versão
+          </button>
+        </div>
       </div>
 
       {/* Analysis Selector */}
@@ -293,6 +321,69 @@ export default function Results() {
             )}
           </div>
         </>
+      )}
+
+      {/* Obsidian Export Modal */}
+      {obsidianModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="card p-6 w-full max-w-md mx-4 space-y-4 border border-[var(--border-subtle)] shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <BookMarked size={20} className="text-[var(--accent)]" />
+                Exportar para Obsidian
+              </h3>
+              <button
+                onClick={() => setObsidianModalOpen(false)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-sm text-[var(--text-tertiary)]">
+              Os arquivos da análise serão copiados para o vault do Obsidian com YAML frontmatter e um índice (MOC).
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-[var(--text-secondary)]">Caminho do Vault</label>
+              <input
+                type="text"
+                value={vaultPath}
+                onChange={e => setVaultPath(e.target.value)}
+                placeholder="~/Documents/Obsidian"
+                className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+              />
+              <p className="text-xs text-[var(--text-muted)]">
+                O vault deve conter a pasta .obsidian/
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setObsidianModalOpen(false)}
+                className="btn-ghost text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleExportObsidian}
+                disabled={exportingObsidian || !vaultPath.trim()}
+                className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {exportingObsidian ? (
+                  <>
+                    <span className="animate-spin">⏳</span> Exportando...
+                  </>
+                ) : (
+                  <>
+                    <BookMarked size={14} /> Exportar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

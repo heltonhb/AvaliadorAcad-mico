@@ -1191,6 +1191,206 @@ async def download_analysis_zip(analysis_id: str, request: Request, cleanup: boo
         headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
     )
 
+
+# =====================================================================
+# OBSIDIAN EXPORT
+# =====================================================================
+
+class ObsidianExportBody(BaseModel):
+    vault_path: str
+
+
+def _add_yaml_frontmatter(content: str, analysis_name: str, filename: str, score_data: dict | None = None) -> str:
+    """Adiciona YAML frontmatter a um arquivo Markdown para compatibilidade com Obsidian."""
+    tags = ["analisetextos", "peer-review"]
+    # Adiciona tags baseado no nome do arquivo
+    name_lower = filename.lower()
+    if "metodologia" in name_lower:
+        tags.append("metodologia")
+    if "escrita" in name_lower:
+        tags.append("escrita")
+    if "gaps" in name_lower:
+        tags.append("gaps")
+    if "parecer" in name_lower or "sintese" in name_lower:
+        tags.append("parecer")
+    if "auditoria" in name_lower:
+        tags.append("auditoria")
+    if "estrutura" in name_lower:
+        tags.append("estrutura")
+    if "referencial" in name_lower or "sota" in name_lower:
+        tags.append("referencial")
+
+    frontmatter_lines = [
+        "---",
+        f"title: \"{filename.replace('.md', '').replace('_', ' ').title()}\"",
+        f"source: \"AnaliseTextos\"",
+        f"analysis: \"{analysis_name}\"",
+        f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
+        f"tags: [{', '.join(tags)}]",
+    ]
+
+    if score_data:
+        if score_data.get("nota"):
+            frontmatter_lines.append(f"nota: {score_data['nota']}")
+        if score_data.get("decision"):
+            frontmatter_lines.append(f"decision: \"{score_data['decision']}\"")
+        if score_data.get("contribution_level"):
+            frontmatter_lines.append(f"contribution_level: \"{score_data['contribution_level']}\"")
+
+    frontmatter_lines.append("---")
+    frontmatter_lines.append("")
+
+    return "\n".join(frontmatter_lines) + content
+
+
+@app.post("/api/analyses/{analysis_id}/export/obsidian")
+async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request: Request):
+    """Exporta todos os arquivos da análise para um vault do Obsidian.
+
+    Cria uma subpasta 'AnaliseTextos/{analysis_name}/' dentro do vault.
+    Arquivos .md recebem YAML frontmatter com tags e metadados.
+    Cria um arquivo 00_MOC.md como índice (Map of Content).
+    """
+    user = _get_user(request)
+    analysis_dir = _get_analysis_dir(analysis_id, user["id"])
+    if not analysis_dir or not analysis_dir.exists():
+        raise HTTPException(status_code=404, detail="Análise não encontrada")
+
+    vault_path = Path(body.vault_path).expanduser().resolve()
+
+    # Validar que o vault existe e contém .obsidian/
+    if not vault_path.exists():
+        raise HTTPException(status_code=400, detail="Diretório do vault não encontrado")
+    if not (vault_path / ".obsidian").is_dir():
+        raise HTTPException(status_code=400, detail="Diretório não parece ser um vault do Obsidian (pasta .obsidian não encontrada)")
+
+    # Validar segurança: vault deve estar em local razoável
+    try:
+        vault_path.relative_to(Path.home().resolve())
+    except ValueError:
+        # Permite paths fora do home, mas valida que não é path-traversal malicioso
+        if ".." in body.vault_path or "~" in body.vault_path:
+            raise HTTPException(status_code=403, detail="Path não permitido")
+
+    # Criar subpasta da análise no vault
+    analysis_name = analysis_dir.name
+    export_dir = vault_path / "AnaliseTextos" / analysis_name
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ler score.json se existir (para frontmatter)
+    score_data = None
+    score_file = analysis_dir / "score.json"
+    if score_file.exists():
+        try:
+            score_data = json.loads(score_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    # Copiar todos os arquivos
+    file_count = 0
+    md_files = []
+
+    for file_path in sorted(analysis_dir.rglob("*")):
+        if not file_path.is_file() or file_path.name.startswith("."):
+            continue
+
+        dest = export_dir / file_path.name
+
+        if file_path.suffix == ".md":
+            # Adicionar frontmatter YAML
+            content = file_path.read_text(encoding="utf-8")
+            enriched = _add_yaml_frontmatter(content, analysis_name, file_path.name, score_data)
+            dest.write_text(enriched, encoding="utf-8")
+            md_files.append(file_path.name)
+        else:
+            # Copiar binários e outros formatos
+            shutil.copy2(file_path, dest)
+
+        file_count += 1
+
+    # Criar MOC (Map of Content)
+    moc_lines = [
+        "---",
+        f"title: \"Mapa de Conteúdo - {analysis_name}\"",
+        "source: \"AnaliseTextos\"",
+        f"analysis: \"{analysis_name}\"",
+        f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
+        "tags: [analisetextos, moc, peer-review]",
+        "---",
+        "",
+        f"# Mapa de Conteúdo — {analysis_name}",
+        "",
+        "## Relatórios",
+        "",
+    ]
+
+    # Ordem dos relatórios
+    report_order = [
+        ("00_estrutura_documento.md", "📋 Estrutura do Documento"),
+        ("01_auditoria_metodologica.md", "🔍 Auditoria Metodológica"),
+        ("02_checklist_editorial.md", "✅ Checklist Editorial"),
+        ("03_referencial_teorico.md", "📚 Referencial Teórico"),
+        ("04_gaps_logicos.md", "⚠️ Gaps Lógicos"),
+        ("05_analise_escrita.md", "✍️ Análise de Escrita"),
+        ("06_sintese_parecer.md", "📝 Síntese e Parecer"),
+        ("07_auditoria_quantitativa.md", "📊 Auditoria Quantitativa"),
+    ]
+
+    exported_names = {f.replace(".md", "") for f in md_files}
+
+    for filename, label in report_order:
+        name_no_ext = filename.replace(".md", "")
+        if name_no_ext in exported_names:
+            moc_lines.append(f"- [[{filename.replace('.md', '')}|{label}]]")
+
+    # Adicionar outros arquivos .md que não estão na ordem padrão
+    standard_names = {f.replace(".md", "") for f, _ in report_order}
+    for md_file in sorted(md_files):
+        name_no_ext = md_file.replace(".md", "")
+        if name_no_ext not in standard_names:
+            moc_lines.append(f"- [[{name_no_ext}|{md_file.replace('.md', '').replace('_', ' ').title()}]]")
+
+    # Adicionar outros arquivos
+    other_files = [
+        f for f in sorted(analysis_dir.iterdir())
+        if f.is_file() and not f.name.startswith(".") and f.suffix != ".md"
+    ]
+
+    if other_files:
+        moc_lines.extend(["", "## Outros Arquivos", ""])
+        for f in other_files:
+            moc_lines.append(f"- {f.name}")
+
+    if score_data:
+        moc_lines.extend([
+            "",
+            "## Score",
+            "",
+            f"- **Nota:** {score_data.get('nota', 'N/A')}",
+            f"- **Decisão:** {score_data.get('decision', 'N/A')}",
+            f"- **Nível de Contribuição:** {score_data.get('contribution_level', 'N/A')}",
+        ])
+
+    moc_content = "\n".join(moc_lines) + "\n"
+    (export_dir / "00_MOC.md").write_text(moc_content, encoding="utf-8")
+    file_count += 1
+
+    logger.info(
+        "obsidian_export",
+        analysis_id=analysis_id,
+        user_id=user["id"],
+        vault_path=str(vault_path),
+        file_count=file_count,
+    )
+
+    return {
+        "ok": True,
+        "exported_path": str(export_dir),
+        "file_count": file_count,
+        "vault_path": str(vault_path),
+    }
+
+
 # =====================================================================
 # SOURCES & BROWSE
 # =====================================================================
