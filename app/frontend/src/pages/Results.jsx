@@ -21,6 +21,15 @@ export default function Results() {
   const [vaultPath, setVaultPath] = useState('~/Documents/Obsidian');
   const [exportingObsidian, setExportingObsidian] = useState(false);
   const [obsidianExported, setObsidianExported] = useState(null); // { exported_path, vault_path }
+  const [obsidianExportError, setObsidianExportError] = useState(null);
+  
+  // New state variables for export options
+  const [exportPdf, setExportPdf] = useState(false);
+  const [exportHtml, setExportHtml] = useState(false);
+  const [exportImages, setExportImages] = useState(false);
+  const [exportCsv, setExportCsv] = useState(false);
+  const [frontmatterTemplate, setFrontmatterTemplate] = useState('default');
+  const [customTags, setCustomTags] = useState('');
 
   useEffect(() => {
     api.analyses()
@@ -71,10 +80,13 @@ export default function Results() {
         .then(setScoreData)
         .catch(error => {
           console.error('Erro ao carregar score.json:', error);
-          setError('Erro ao carregar os detalhes da análise. Verifique sua conexão e tente novamente.');
+          // Não setar erro global — score é opcional, não deve quebrar a página
+          setScoreData(null);
         });
+    } else {
+      setScoreData(null);
     }
-  }, [scoreFile, selectedId]);
+  }, [selectedId, analysisDetail]);
 
   if (loading) {
     return (
@@ -142,11 +154,27 @@ export default function Results() {
   const handleExportObsidian = async () => {
     if (!selectedId || !vaultPath.trim()) return;
     setExportingObsidian(true);
+    setObsidianExportError(null);
     try {
-      const result = await api.exportToObsidian(selectedId, vaultPath.trim());
+      const result = await api.exportToObsidian(selectedId, {
+        vault_path: vaultPath.trim(),
+        export_md: true,
+        export_pdf: exportPdf,
+        export_html: exportHtml,
+        export_images: exportImages,
+        export_csv: exportCsv,
+        frontmatterTemplate: frontmatterTemplate,
+        custom_tags: customTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0),
+      });
+      console.debug('[ObsidianExport] result:', result);
+      if (!result || !result.exported_path) {
+        throw new Error('Resposta inválida do servidor');
+      }
       setObsidianExported({ exported_path: result.exported_path, vault_path: result.vault_path });
       toast(`✅ Exportado! ${result.file_count} arquivos`, 'success');
     } catch (err) {
+      console.error('[ObsidianExport] error:', err);
+      setObsidianExportError(err.message);
       toast(`❌ Erro ao exportar: ${err.message}`, 'error');
     } finally {
       setExportingObsidian(false);
@@ -155,15 +183,25 @@ export default function Results() {
 
   const handleOpenInObsidian = () => {
     if (!obsidianExported) return;
-    // Extrair nome do vault (último diretório do path)
-    const vaultName = vaultPath.trim().split('/').filter(Boolean).pop();
+    // Usar o vault_path resolvido do backend (não o input do usuário) para extrair o nome
+    const vaultBase = obsidianExported.vault_path.replace(/\/+$/, '');
+    const vaultName = vaultBase.split('/').filter(Boolean).pop();
     // Construir path relativo: AnaliseTextos/ANALYSIS_NAME/00_MOC
-    const exportedPath = obsidianExported.exported_path;
-    const vaultBase = obsidianExported.vault_path;
-    const relativePath = exportedPath.replace(vaultBase, '').replace(/^\//, '');
-    // Abrir via obsidian:// URI scheme
+    const exportedPath = obsidianExported.exported_path.replace(/\/+$/, '');
+    const relativePath = exportedPath.startsWith(vaultBase)
+      ? exportedPath.slice(vaultBase.length).replace(/^\//, '')
+      : exportedPath;
+    // Abrir via obsidian:// URI scheme sem sair da página atual
     const uri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath + '/00_MOC')}`;
-    window.open(uri, '_blank');
+    // Usar iframe oculto para abrir protocolo externo sem navegar fora da página
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = uri;
+    document.body.appendChild(iframe);
+    // Limpar iframe após um tempo
+    setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch (_) { /* ignore */ }
+    }, 2000);
   };
 
   return (
@@ -177,7 +215,7 @@ export default function Results() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setObsidianExported(null); setObsidianModalOpen(true); }}
+            onClick={() => { setObsidianExported(null); setObsidianExportError(null); setObsidianModalOpen(true); }}
             className="btn-secondary text-xs flex items-center gap-1.5"
             title="Exportar para Obsidian"
           >
@@ -359,6 +397,12 @@ export default function Results() {
               Os arquivos da análise serão copiados para o vault do Obsidian com YAML frontmatter e um índice (MOC).
             </p>
 
+            {obsidianExportError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-300">
+                ❌ Erro ao exportar: {obsidianExportError}
+              </div>
+            )}
+
             {obsidianExported ? (
               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300">
                 ✅ Arquivos exportados com sucesso em:<br />
@@ -377,6 +421,87 @@ export default function Results() {
                 <p className="text-xs text-[var(--text-muted)]">
                   O vault deve conter a pasta .obsidian/
                 </p>
+              </div>
+            )}
+            
+            {/* Export options */}
+            {!obsidianExported && (
+              <div className="space-y-3 pt-4">
+                <label className="text-xs font-semibold text-[var(--text-secondary)]">O que exportar</label>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <input
+                      type="checkbox"
+                      id="export-md"
+                      checked={true}
+                      disabled
+                    />
+                    <label htmlFor="export-md" className="text-[var(--text-primary)]">Markdown (.md)</label>
+                  </div>
+                  <div>
+                    <input
+                      type="checkbox"
+                      id="export-pdf"
+                      checked={exportPdf}
+                      onChange={(e) => setExportPdf(e.target.checked)}
+                    />
+                    <label htmlFor="export-pdf" className="text-[var(--text-primary)]">PDF (.pdf)</label>
+                  </div>
+                  <div>
+                    <input
+                      type="checkbox"
+                      id="export-html"
+                      checked={exportHtml}
+                      onChange={(e) => setExportHtml(e.target.checked)}
+                    />
+                    <label htmlFor="export-html" className="text-[var(--text-primary)]">HTML (.html, .htm)</label>
+                  </div>
+                  <div>
+                    <input
+                      type="checkbox"
+                      id="export-images"
+                      checked={exportImages}
+                      onChange={(e) => setExportImages(e.target.checked)}
+                    />
+                    <label htmlFor="export-images" className="text-[var(--text-primary)]">Imagens</label>
+                  </div>
+                  <div>
+                    <input
+                      type="checkbox"
+                      id="export-csv"
+                      checked={exportCsv}
+                      onChange={(e) => setExportCsv(e.target.checked)}
+                    />
+                    <label htmlFor="export-csv" className="text-[var(--text-primary)]">CSV (.csv)</label>
+                  </div>
+                </div>
+                
+                {/* Frontmatter template */}
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs font-semibold text-[var(--text-secondary)]">Template do Frontmatter</label>
+                  <select
+                    value={frontmatterTemplate}
+                    onChange={(e) => setFrontmatterTemplate(e.target.value)}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                  >
+                    <option value="default">Padrão</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="detailed">Detalhado</option>
+                  </select>
+                </div>
+                
+                {/* Custom tags */}
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs font-semibold text-[var(--text-secondary)]">Tags Customizadas (opcional)</label>
+                  <input
+                    type="text"
+                    value={customTags}
+                    placeholder="ex: pesquisa, metodologia, resultados"
+                    onChange={(e) => setCustomTags(e.target.value)}
+                    className="w-full bg-[var(--bg-primary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)]"
+                  />
+                  <p className="text-xs text-[var(--text-muted)]">Separar por vírgula</p>
+                </div>
               </div>
             )}
 

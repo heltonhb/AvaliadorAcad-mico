@@ -41,11 +41,12 @@ export function ToastProvider({ children }) {
 
   const toast = useCallback((message, type = 'info', duration, action) => {
     const ms = duration ?? DURATIONS[type] ?? 4000;
-    setToasts(prev => [...prev, { id, message, type, ms, action }]);
+    const toastId = ++idRef.current;
+    setToasts(prev => [...prev, { id: toastId, message, type, ms, action }]);
     if (ms > 0) {
-      setTimeout(() => remove(id), ms);
+      setTimeout(() => remove(toastId), ms);
     }
-    return id;
+    return toastId;
   }, [remove]);
 
   return (

@@ -131,9 +131,18 @@ export const api = {
   },
 
   // Export analysis to Obsidian vault
-  exportToObsidian: (analysisId, vaultPath) =>
+  exportToObsidian: (analysisId, body) =>
     request(`/analyses/${encodeURIComponent(analysisId)}/export/obsidian`, {
       method: 'POST',
-      body: JSON.stringify({ vault_path: vaultPath }),
+      body: JSON.stringify({
+        vault_path: body.vault_path,
+        export_md: body.export_md ?? true,
+        export_pdf: body.export_pdf ?? false,
+        export_html: body.export_html ?? false,
+        export_images: body.export_images ?? false,
+        export_csv: body.export_csv ?? false,
+        frontmatter_template: body.frontmatterTemplate ?? 'default',
+        custom_tags: body.custom_tags ?? [],
+      }),
     }),
 };

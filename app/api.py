@@ -35,6 +35,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 dotenv.load_dotenv()
 
+from typing import List, Optional
 # ===== Telemetry (importado antes do structlog.configure) =====
 from telemetry import setup_telemetry, get_tracer
 
@@ -1198,11 +1199,20 @@ async def download_analysis_zip(analysis_id: str, request: Request, cleanup: boo
 
 class ObsidianExportBody(BaseModel):
     vault_path: str
+    export_md: bool = True
+    export_pdf: bool = False
+    export_html: bool = False
+    export_images: bool = False
+    export_csv: bool = False
+    frontmatter_template: str = "default"  # or "minimal", "detailed", or custom JSON
+    custom_tags: List[str] = []
 
 
-def _add_yaml_frontmatter(content: str, analysis_name: str, filename: str, score_data: dict | None = None) -> str:
+def _add_yaml_frontmatter(content: str, analysis_name: str, filename: str, score_data: dict | None = None, template: str = "default", custom_tags: List[str] = []) -> str:
     """Adiciona YAML frontmatter a um arquivo Markdown para compatibilidade com Obsidian."""
+    # Tags base
     tags = ["analisetextos", "peer-review"]
+    
     # Adiciona tags baseado no nome do arquivo
     name_lower = filename.lower()
     if "metodologia" in name_lower:
@@ -1219,27 +1229,70 @@ def _add_yaml_frontmatter(content: str, analysis_name: str, filename: str, score
         tags.append("estrutura")
     if "referencial" in name_lower or "sota" in name_lower:
         tags.append("referencial")
-
-    frontmatter_lines = [
-        "---",
-        f"title: \"{filename.replace('.md', '').replace('_', ' ').title()}\"",
-        f"source: \"AnaliseTextos\"",
-        f"analysis: \"{analysis_name}\"",
-        f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
-        f"tags: [{', '.join(tags)}]",
-    ]
-
-    if score_data:
-        if score_data.get("nota"):
-            frontmatter_lines.append(f"nota: {score_data['nota']}")
-        if score_data.get("decision"):
-            frontmatter_lines.append(f"decision: \"{score_data['decision']}\"")
-        if score_data.get("contribution_level"):
-            frontmatter_lines.append(f"contribution_level: \"{score_data['contribution_level']}\"")
-
-    frontmatter_lines.append("---")
-    frontmatter_lines.append("")
-
+    
+    # Adiciona tags customizadas
+    tags.extend(custom_tags)
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_tags = []
+    for tag in tags:
+        if tag not in seen:
+            seen.add(tag)
+            unique_tags.append(tag)
+    tags = unique_tags
+    
+    # Frontmatter baseado no template
+    if template == "minimal":
+        frontmatter_lines = [
+            "---",
+            f"title: \"{filename.replace('.md', '').replace('_', ' ').title()}\"",
+            f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
+            f"tags: [{', '.join(f'\"{t}\"' for t in tags)}]",
+            "---",
+            ""
+        ]
+    elif template == "detailed":
+        frontmatter_lines = [
+            "---",
+            f"title: \"{filename.replace('.md', '').replace('_', ' ').title()}\"",
+            f"source: \"AnaliseTextos\"",
+            f"analysis: \"{analysis_name}\"",
+            f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
+            f"tags: [{', '.join(f'\"{t}\"' for t in tags)}]",
+        ]
+        if score_data:
+            if score_data.get("nota"):
+                frontmatter_lines.append(f"nota: {score_data['nota']}")
+            if score_data.get("decision"):
+                frontmatter_lines.append(f"decision: \"{score_data['decision']}\"")
+            if score_data.get("contribution_level"):
+                frontmatter_lines.append(f"contribution_level: \"{score_data['contribution_level']}\"")
+        frontmatter_lines.extend([
+            "---",
+            ""
+        ])
+    else:  # default template
+        frontmatter_lines = [
+            "---",
+            f"title: \"{filename.replace('.md', '').replace('_', ' ').title()}\"",
+            f"source: \"AnaliseTextos\"",
+            f"analysis: \"{analysis_name}\"",
+            f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
+            f"tags: [{', '.join(f'\"{t}\"' for t in tags)}]",
+        ]
+        if score_data:
+            if score_data.get("nota"):
+                frontmatter_lines.append(f"nota: {score_data['nota']}")
+            if score_data.get("decision"):
+                frontmatter_lines.append(f"decision: \"{score_data['decision']}\"")
+            if score_data.get("contribution_level"):
+                frontmatter_lines.append(f"contribution_level: \"{score_data['contribution_level']}\"")
+        frontmatter_lines.extend([
+            "---",
+            ""
+        ])
+    
     return "\n".join(frontmatter_lines) + content
 
 
@@ -1252,6 +1305,8 @@ async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request
     Cria um arquivo 00_MOC.md como índice (Map of Content).
     """
     user = _get_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Não autenticado")
     analysis_dir = _get_analysis_dir(analysis_id, user["id"])
     if not analysis_dir or not analysis_dir.exists():
         raise HTTPException(status_code=404, detail="Análise não encontrada")
@@ -1264,13 +1319,16 @@ async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request
     if not (vault_path / ".obsidian").is_dir():
         raise HTTPException(status_code=400, detail="Diretório não parece ser um vault do Obsidian (pasta .obsidian não encontrada)")
 
-    # Validar segurança: vault deve estar em local razoável
+    # Validar segurança: rejeitar path traversal (..) no input original
+    if ".." in body.vault_path:
+        raise HTTPException(status_code=403, detail="Path não permitido")
+
+    # Validar que o path resolvido está dentro do home ou de um diretório razoável
     try:
         vault_path.relative_to(Path.home().resolve())
     except ValueError:
-        # Permite paths fora do home, mas valida que não é path-traversal malicioso
-        if ".." in body.vault_path or "~" in body.vault_path:
-            raise HTTPException(status_code=403, detail="Path não permitido")
+        # Permite paths fora do home (ex: /mnt/data), mas loga um aviso
+        logger.warning("obsidian_export_external_path", vault_path=str(vault_path))
 
     # Criar subpasta da análise no vault
     analysis_name = analysis_dir.name
@@ -1286,7 +1344,7 @@ async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request
         except Exception:
             pass
 
-    # Copiar todos os arquivos
+    # Copiar todos os arquivos baseado nas opções de exportação
     file_count = 0
     md_files = []
 
@@ -1294,12 +1352,28 @@ async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request
         if not file_path.is_file() or file_path.name.startswith("."):
             continue
 
+        # Verificar se este tipo de arquivo deve ser exportado
+        should_export = False
+        if file_path.suffix == ".md" and body.export_md:
+            should_export = True
+        elif file_path.suffix == ".pdf" and body.export_pdf:
+            should_export = True
+        elif file_path.suffix in [".html", ".htm"] and body.export_html:
+            should_export = True
+        elif file_path.suffix.lower() in [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg"] and body.export_images:
+            should_export = True
+        elif file_path.suffix == ".csv" and body.export_csv:
+            should_export = True
+        
+        if not should_export:
+            continue
+
         dest = export_dir / file_path.name
 
-        if file_path.suffix == ".md":
+        if file_path.suffix == ".md" and body.export_md:
             # Adicionar frontmatter YAML
             content = file_path.read_text(encoding="utf-8")
-            enriched = _add_yaml_frontmatter(content, analysis_name, file_path.name, score_data)
+            enriched = _add_yaml_frontmatter(content, analysis_name, file_path.name, score_data, body.frontmatter_template, body.custom_tags)
             dest.write_text(enriched, encoding="utf-8")
             md_files.append(file_path.name)
         else:
@@ -1315,7 +1389,7 @@ async def export_to_obsidian(analysis_id: str, body: ObsidianExportBody, request
         "source: \"AnaliseTextos\"",
         f"analysis: \"{analysis_name}\"",
         f"date: \"{datetime.now().strftime('%Y-%m-%d')}\"",
-        "tags: [analisetextos, moc, peer-review]",
+        "tags: [\"analisetextos\", \"moc\", \"peer-review\"]",
         "---",
         "",
         f"# Mapa de Conteúdo — {analysis_name}",
